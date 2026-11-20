@@ -5,12 +5,12 @@ An agent picks the next unblocked `ready-for-agent` ticket (a sub-issue of spec 
 | File | What it does |
 |---|---|
 | `prompt.md` | The instructions every run follows (pick → claim → draft PR → TDD → screenshots → code review → PR → CI green). |
-| `next-ticket.sh` | Deterministically picks the work: `RESUME <n>` (ours, assigned, PR still draft), `START <n>` (unblocked, unassigned; `priority`-labelled first, then lowest number), or `NONE`. Never the spec or `ready-for-human`. |
+| `next-ticket.sh` | Deterministically picks the work: `RESUME <n>` (ours, assigned, PR still draft), `START <n>` (unblocked, unassigned; `priority`-labelled first, then lowest number), `WAIT` (see **WIP limit**) or `NONE`. Never the spec or `ready-for-human`. Tested in `ralph/tests/` (`npm run test:ralph`). |
 | `screenshots.ts` | Agent QA: phone-sized screenshots of changed pages into `docs/screenshots/<n>/`, embedded in the PR. |
 | `sync-main.sh` | Puts the checkout on the latest `origin/main` (detached) before every run, so a stale branch can't mean a stale prompt or picker. Refuses if tracked files have uncommitted changes. |
 | `setup.sh` | Prepares a machine: Node 24, `npm ci`, a placeholder `.env` if none exists, Docker + Postgres, Playwright. |
 | `once.sh` | One ticket, **interactive** — watch it and step in. |
-| `afk.sh [n]` | Up to `n` tickets (default 3), **headless**, live progress in the terminal, transcripts in `ralph/logs/`. Stops on `NO_WORK`, `BLOCKED`, or an unfinished run. |
+| `afk.sh [n]` | Up to `n` tickets (default 3), **headless**, live progress in the terminal, transcripts in `ralph/logs/`. Stops on `NO_WORK`, `WAITING`, `BLOCKED`, or an unfinished run. |
 | `format-stream.jq` | Renders the headless stream as a readable log. |
 
 ## Safety rails
@@ -32,6 +32,38 @@ An agent picks the next unblocked `ready-for-agent` ticket (a sub-issue of spec 
 Both switch this checkout to the latest `origin/main` first (detached HEAD). A run that builds a ticket leaves it on that ticket's branch; a `NO_WORK` or `BLOCKED` run leaves it detached on main. Run `git switch main` when you want your own branch back. Keep the dev server (`npm run dev`) in a separate terminal; it follows whatever is checked out.
 
 Watch progress in the terminal, or on GitHub (the claimed issue, the draft PR, the Actions tab). Stop any time with `Ctrl+C`. A ticket counts as handed over once its PR is out of draft; the next run moves on.
+
+## WIP limit
+
+The loop never produces more PRs than you can review. When `AFK_WIP_LIMIT` (default **5**) or more agent PRs (`claude/*` branches) are open and ready for review, `next-ticket.sh` prints `WAIT` instead of starting a ticket; the run ends with `WAITING` and `afk.sh` stops, telling you so. Finishing an unfinished ticket (`RESUME`) is still allowed. Change the limit per run: `AFK_WIP_LIMIT=3 ./ralph/afk.sh`.
+
+## QA PRs before merging
+
+Each PR gets its own running instance, so you can QA several side by side without touching your own checkout or dev data:
+
+```sh
+npm run qa 31          # create PR #31's instance, or update it to the PR's latest commit; prints its URL
+npm run qa -- 31 --fresh   # the same, re-copying the database from your dev database
+npm run qa:list        # instances: PR, URL, commit, title
+npm run qa:done 31     # stop its server, drop its database, remove its worktree (safe to repeat)
+```
+
+An instance is:
+- a git worktree at `../studyloop-pr-<n>` on the PR's latest commit, with its own `npm ci` and a link to your `.env`;
+- a database `studyloop_pr_<n>`, first a **copy of your dev database** (taken with `pg_dump`, so `npm run dev` can keep running), then migrated with the PR's migrations. Re-running keeps it, so data you entered while testing survives an update; `--fresh` starts over from dev;
+- a dev server on port 3000 + PR number, or the next free port. Never 3100: e2e and agent screenshots reuse whatever server listens there. Its log is `.qa/<n>.log`.
+
+**Signing in.** Browsers share one `localhost` session cookie across ports, and the copied database carries your dev session, so signing in on your dev server (`npm run dev`) *before* `npm run qa` should sign you in on every instance. Don't sign in on an instance itself: its new session exists only in its own database, and it replaces the shared cookie, signing you out of dev and the other instances. If that happens, sign in on dev again and re-copy with `npm run qa -- <n> --fresh`.
+
+**Build badge.** Outside production, every page shows which build it is, bottom centre: `PR #<n> · <sha>` in a QA instance, `<branch> · <sha>` in plain dev. Issues you file with the in-app reporter carry the same commit, plus the PR number when filed from a QA instance.
+
+## Tracing an issue back to its PR
+
+1. **Before merging**, QA each PR in its own instance. File what you find from there: the report names the PR.
+2. **After merging a batch**, do a quick check on `main` (`git switch main && git pull`, then `npm run dev`).
+3. **An issue found on `main`** carries the commit (from the badge, or the reporter's App version row). `/triage` finds the PR that introduced it and links it from the new ticket:
+   - `gh pr list --state merged --search <sha>` names the PR a commit came from;
+   - when the commit is a merge of several PRs, or the issue just appeared somewhere in a batch, `git bisect start <bad-sha> <last-good-sha>` and `git bisect run` with a reproducing test finds the first bad commit, then search for its PR as above.
 
 ## Run it overnight in the cloud (Claude Code routine)
 

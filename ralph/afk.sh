@@ -3,6 +3,7 @@
 # is blocked, or the iteration cap is hit. Progress streams to this terminal; full transcripts
 # go to ralph/logs/.
 # Usage: ./ralph/afk.sh [max-tickets]   (default 3)
+# Stops early once AFK_WIP_LIMIT (default 5) agent PRs are waiting for review (see next-ticket.sh).
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
@@ -36,6 +37,7 @@ for i in $(seq 1 "$MAX"); do
   case "$final" in
     DONE*) continue ;;
     NO_WORK*) echo "No unblocked ready-for-agent tickets left."; exit 0 ;;
+    WAITING*) echo "Stopped: ${AFK_WIP_LIMIT:-5} or more agent PRs are waiting for your review (AFK_WIP_LIMIT). Review or merge some, then run again."; exit 0 ;;
     BLOCKED*) echo "Stopped: a ticket needs a human (see the issue comment)."; exit 0 ;;
     *) echo "Stopped: run ended without a final status line (limit reached or error). Check $log." ; exit 1 ;;
   esac

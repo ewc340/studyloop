@@ -4,6 +4,8 @@
 #                (same ordering as START if there are several)
 #   START <n>    the next open, unassigned, unblocked ready-for-agent ticket: those labelled
 #                `priority` first, then lowest number
+#   WAIT         there is a ticket to start, but AFK_WIP_LIMIT (default 5) or more agent PRs
+#                (claude/* branches) are open and ready for review: the owner can't review more
 #   NONE         nothing to do
 # Tickets are the sub-issues of the spec issue (SPEC_ISSUE, default 1). The spec itself and anything
 # labelled ready-for-human are never picked. A ticket whose PR is ready for review is finished from
@@ -11,6 +13,11 @@
 set -euo pipefail
 
 SPEC_ISSUE="${SPEC_ISSUE:-1}"
+WIP_LIMIT="${AFK_WIP_LIMIT:-5}"
+if ! [[ "$WIP_LIMIT" =~ ^[1-9][0-9]*$ ]]; then
+  echo "AFK_WIP_LIMIT must be a positive whole number (got '$WIP_LIMIT')" >&2
+  exit 2
+fi
 REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
 ME="$(gh api user -q .login)"
 
@@ -24,6 +31,10 @@ candidates="$(gh api --paginate "repos/$REPO/issues/$SPEC_ISSUE/sub_issues?per_p
 # Ticket numbers that already have a ready-for-review PR from a claude/<n>-* branch.
 handed_over="$(gh pr list --state open --limit 100 --json headRefName,isDraft \
   --jq '.[] | select(.isDraft | not) | .headRefName | capture("^claude/(?<n>[0-9]+)-").n' || true)"
+
+# Open, ready-for-review PRs from agent branches: the owner's review queue.
+ready_for_review="$(gh pr list --state open --limit 100 --json headRefName,isDraft \
+  --jq '[.[] | select((.isDraft | not) and (.headRefName | startswith("claude/")))] | length')"
 
 is_handed_over() { grep -qx "$1" <<< "$handed_over"; }
 
@@ -58,6 +69,10 @@ while read -r number assignees; do
   [ -z "${number:-}" ] && continue
   [ -n "$assignees" ] && continue
   if [ "$(open_blockers "$number")" = "0" ]; then
+    if [ "$ready_for_review" -ge "$WIP_LIMIT" ]; then
+      echo "WAIT"
+      exit 0
+    fi
     echo "START $number"
     exit 0
   fi

@@ -88,6 +88,19 @@ describe("reporting an issue", () => {
     expect(body).toContain("| Reported | 2026-11-20 10:04 (America/New_York) |");
   });
 
+  it("a report from a PR's QA instance names the pull request alongside the commit", async () => {
+    const tracker = inMemoryIssueTracker();
+    await reportIssue(await actingAsOwner(), { ...reportingWith(tracker), pullRequest: 31 }, bugReport());
+    expect(tracker.issues[0].body).toContain("| App version | `abc1234` |");
+    expect(tracker.issues[0].body).toContain("| Pull request | #31 |");
+  });
+
+  it("a report from outside a QA instance has no pull request row", async () => {
+    const tracker = inMemoryIssueTracker();
+    await reportIssue(await actingAsOwner(), reportingWith(tracker), bugReport());
+    expect(tracker.issues[0].body).not.toContain("Pull request");
+  });
+
   it("a wide viewport is reported as desktop", async () => {
     const tracker = inMemoryIssueTracker();
     const page = { ...phonePage, viewport: { width: 1440, height: 900 } };

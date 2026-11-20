@@ -1,6 +1,6 @@
 // Issue reporting (owner tooling) as configured by server env. The token never leaves the server.
-import { execFileSync } from "node:child_process";
 import { githubIssueTracker, inMemoryIssueTracker, type IssueReporting, type IssueTracker } from "@/core";
+import { buildInfo } from "./build-info";
 import { isTestAuthBypassEnabled } from "./test-auth-bypass";
 
 type Env = Record<string, string | undefined>;
@@ -27,7 +27,8 @@ export function issueReportingFrom(env: Env = process.env): ServerIssueReporting
   const tracker = sharedTracker(fake ? "in-memory" : `github:${repository}:${token}`, () =>
     fake ? inMemoryIssueTracker() : githubIssueTracker({ token, repository }),
   );
-  return { tracker, ownerEmail, appVersion: appVersion(env), repository };
+  const build = buildInfo(env);
+  return { tracker, ownerEmail, appVersion: build.commit, pullRequest: build.pullRequest, repository };
 }
 
 const globalForTrackers = globalThis as unknown as { studyloopIssueTrackers?: Map<string, IssueTracker> };
@@ -37,19 +38,4 @@ function sharedTracker(key: string, create: () => IssueTracker): IssueTracker {
   const trackers = (globalForTrackers.studyloopIssueTrackers ??= new Map());
   if (!trackers.has(key)) trackers.set(key, create());
   return trackers.get(key)!;
-}
-
-let gitCommit: string | undefined;
-
-/** APP_VERSION if set (e.g. by a Docker build), else the checked-out git commit. */
-function appVersion(env: Env): string {
-  if (env.APP_VERSION?.trim()) return env.APP_VERSION.trim();
-  if (gitCommit === undefined) {
-    try {
-      gitCommit = execFileSync("git", ["rev-parse", "--short", "HEAD"], { encoding: "utf8", stdio: "pipe" }).trim();
-    } catch {
-      gitCommit = "unknown";
-    }
-  }
-  return gitCommit;
 }

@@ -85,6 +85,8 @@ export interface IssueReporting {
   ownerEmail: string;
   /** The running app's version (git commit). */
   appVersion: string;
+  /** The pull request this build belongs to, when it runs as that PR's QA instance. */
+  pullRequest?: number;
 }
 
 /** Only the owner may report issues. */
@@ -166,6 +168,7 @@ function fileName(image: IssueReportImage): string {
 /** What the server knows about a report that the browser doesn't. */
 interface ServerFacts {
   appVersion: string;
+  pullRequest?: number;
   reportedAt: Date;
   timezone: string;
 }
@@ -208,7 +211,12 @@ async function serverFacts(
 ): Promise<ServerFacts> {
   const owner = await requireOwner(ctx, reporting);
   validate(report);
-  return { appVersion: reporting.appVersion, reportedAt: ctx.clock.now(), timezone: owner.timezone };
+  return {
+    appVersion: reporting.appVersion,
+    pullRequest: reporting.pullRequest,
+    reportedAt: ctx.clock.now(),
+    timezone: owner.timezone,
+  };
 }
 
 const NOT_UPLOADED_YET = "uploaded when you submit";
@@ -230,6 +238,7 @@ function draftIssue(report: IssueReportPreview, facts: ServerFacts, imageUrls: (
     ["Route", code(page.route)],
     ["Viewport", `${width}×${height} (${width <= PHONE_MAX_WIDTH ? "phone" : "desktop"})`],
     ["App version", code(facts.appVersion)],
+    ...(facts.pullRequest ? [["Pull request", `#${facts.pullRequest}`] as [string, string]] : []),
     ["Browser", code(page.userAgent)],
     ["Reported", `${formatLocal(facts.reportedAt, facts.timezone)} (${facts.timezone})`],
   ];

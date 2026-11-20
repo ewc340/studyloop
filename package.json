@@ -15,9 +15,13 @@
     "db:down": "docker compose down",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:generate": "drizzle-kit generate",
-    "check": "npm run lint && npm run typecheck && npm test && npm run test:hooks && npm run e2e && npm run build",
+    "check": "npm run lint && npm run typecheck && npm test && npm run test:hooks && npm run test:ralph && npm run e2e && npm run build",
     "deps:relock": "rm -rf node_modules package-lock.json && npm install",
-    "test:hooks": "python3 -m unittest discover -s .claude/hooks"
+    "test:hooks": "python3 -m unittest discover -s .claude/hooks",
+    "test:ralph": "python3 -m unittest discover -s ralph/tests",
+    "qa": "tsx scripts/qa.ts up",
+    "qa:list": "tsx scripts/qa.ts list",
+    "qa:done": "tsx scripts/qa.ts done"
   },
   "dependencies": {
     "better-auth": "^1.7.26",

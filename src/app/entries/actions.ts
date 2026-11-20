@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
   FutureDailyEntryError,
@@ -45,6 +46,9 @@ export async function submitDailyEntry(
     if (error instanceof TopicNotFoundError) return { error: "One of the tagged Topics no longer exists" };
     throw error;
   }
+  // Pages kept alive across navigations (Activity) must not show the entry as it was before saving.
+  revalidatePath("/entries", "layout");
+  revalidatePath("/topics", "layout");
   redirect(`/entries#entry-${date}`);
 }
 

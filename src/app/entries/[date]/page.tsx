@@ -42,7 +42,13 @@ async function DailyEntryEditor({ params }: { params: PageProps<"/entries/[date]
   return (
     <>
       {heading}
-      <DailyEntryForm topics={topics} entry={entry} action={submitDailyEntry.bind(null, date)} />
+      {/* Keyed by what was saved, so the form starts afresh from the saved entry rather than a stale draft. */}
+      <DailyEntryForm
+        key={JSON.stringify(entry)}
+        topics={topics}
+        entry={entry}
+        action={submitDailyEntry.bind(null, date)}
+      />
     </>
   );
 }

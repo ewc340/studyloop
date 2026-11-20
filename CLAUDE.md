@@ -8,6 +8,7 @@
 - Domain logic goes in `src/core` behind its public interface (`src/core/index.ts`); never import Next.js there. UI code in `src/app` stays a thin adapter.
 - Tests exercise the core's public interface against real Postgres using `useTestContext()` (fake Clock from `src/test/fake-clock.ts`, tables truncated per test). Don't mock the database or internal modules.
 - `npm run check` (lint, typecheck, core tests, hook tests, e2e, build) must pass before a PR is opened for review or marked ready. Work-in-progress pushes to your own ticket branch behind a draft PR are fine before that.
+- **Private elements**: put `data-private` on every element that renders Learner data (names, descriptions, notes, free text, inputs holding it, any record a Learner wrote). The owner's issue-report page capture masks these before posting to the public repo (`src/app/issue-report/capture.ts`); `e2e/issue-report.spec.ts` checks the masking pixel by pixel.
 - After adding, removing or upgrading dependencies, run `npm run deps:relock` and commit `package-lock.json`. Incremental `npm install` on macOS drops Linux-only optional packages and breaks `npm ci` in CI.
 - After changing `src/core/db/schema.ts`, run `npm run db:generate` and commit the migration.
 - Git guardrails: `.claude/hooks/block_dangerous_git.py` (the single source of truth for what's blocked). Push your ticket branch by name (`git push -u origin <branch>`); merging is the owner's job.

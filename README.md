@@ -25,6 +25,10 @@ npm run e2e            # Playwright, phone viewport, against a dedicated e2e dat
 npm run check          # lint + typecheck + tests + hook tests + e2e + build (what CI runs)
 ```
 
+## Report issues from the app
+
+The owner can report a bug or idea from any page (the round button, bottom right): it captures the page with private content masked, takes optional attached images, previews the exact issue, and posts it here labelled `needs-triage`. Images are committed to the `feedback-assets` branch and embedded by URL. To turn it on, set `ISSUE_REPORTING_GITHUB_TOKEN` (a fine-grained token for this repository with Issues and Contents read/write) and `ISSUE_REPORTING_OWNER_EMAIL` (see `.env.example`). Without both, nobody sees the control.
+
 ## AFK loop
 
 Tickets labelled `ready-for-agent` can be implemented unattended: `./ralph/once.sh` (watch one), `./ralph/afk.sh 3` (headless), or a nightly cloud routine. See [ralph/README.md](./ralph/README.md).

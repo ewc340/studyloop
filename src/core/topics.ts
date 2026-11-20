@@ -20,6 +20,13 @@ export interface TopicPage {
   topic: Topic;
 }
 
+export class InvalidTopicError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidTopicError";
+  }
+}
+
 const topicColumns = { id: topic.id, name: topic.name, description: topic.description };
 
 function toTopic(row: { id: string; name: string; description: string | null }): Topic {
@@ -28,9 +35,12 @@ function toTopic(row: { id: string; name: string; description: string | null }):
 
 /** Creates a Topic for the acting Learner. */
 export async function createTopic(ctx: LearnerContext, input: NewTopic): Promise<Topic> {
+  const name = input.name.trim();
+  if (!name) throw new InvalidTopicError("A Topic needs a name");
+  const description = input.description?.trim() || null;
   const [row] = await ctx.db
     .insert(topic)
-    .values({ userId: ctx.learnerId, name: input.name, description: input.description ?? null })
+    .values({ userId: ctx.learnerId, name, description })
     .returning(topicColumns);
   return toTopic(row);
 }

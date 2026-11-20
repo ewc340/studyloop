@@ -42,6 +42,7 @@ export {
   canReportIssues,
   inMemoryIssueTracker,
   InvalidIssueReportError,
+  IssueTrackerError,
   ISSUE_REPORT_LIMITS,
   NotIssueReporterError,
   previewIssueReport,
@@ -55,5 +56,6 @@ export {
   type IssueReportPage,
   type IssueReportType,
   type IssueTracker,
+  type IssueTrackerFailure,
   type ReportedIssue,
 } from "./issue-reports";

@@ -3,12 +3,14 @@ import {
   canReportIssues,
   inMemoryIssueTracker,
   InvalidIssueReportError,
+  IssueTrackerError,
   NotIssueReporterError,
   previewIssueReport,
   reportIssue,
   setLearnerTimezone,
   type IssueReport,
   type IssueReporting,
+  type IssueReportPreview,
 } from "@/core";
 import { useTestContext } from "@/test/core-harness";
 import { actingAsNewLearner } from "@/test/learners";
@@ -148,7 +150,10 @@ describe("reporting an issue", () => {
 
   it("a preview never uploads anything and needs no image bytes", async () => {
     const tracker = inMemoryIssueTracker();
-    const report = bugReport({ images: [{ kind: "attachment", name: "a.png", contentType: "image/png" }] });
+    const report: IssueReportPreview = {
+      ...bugReport(),
+      images: [{ kind: "attachment", name: "a.png", contentType: "image/png" }],
+    };
 
     const preview = await previewIssueReport(await actingAsOwner(), reportingWith(tracker), report);
 
@@ -187,6 +192,17 @@ describe("reporting an issue", () => {
       expect(tracker.images).toHaveLength(0);
       expect(tracker.issues).toHaveLength(0);
     });
+  });
+
+  it("a tracker failure surfaces as an IssueTrackerError saying why", async () => {
+    const tracker = inMemoryIssueTracker();
+    tracker.failWith(new IssueTrackerError("rate-limited"));
+
+    const result = reportIssue(await actingAsOwner(), reportingWith(tracker), bugReport());
+
+    await expect(result).rejects.toThrow(IssueTrackerError);
+    await expect(result).rejects.toMatchObject({ reason: "rate-limited", message: expect.stringMatching(/rate limit/i) });
+    expect(tracker.issues).toHaveLength(0);
   });
 
   it("only the owner may report issues", async () => {

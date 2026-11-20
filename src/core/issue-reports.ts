@@ -52,6 +52,26 @@ export interface IssueTracker {
   createIssue(draft: IssueDraft): Promise<ReportedIssue>;
 }
 
+export type IssueTrackerFailure = "unauthorized" | "forbidden" | "rate-limited" | "unavailable";
+
+const FAILURE_MESSAGES: Record<IssueTrackerFailure, string> = {
+  unauthorized: "GitHub rejected the token. It may be wrong or expired.",
+  forbidden: "The token can't do this. It needs Issues and Contents read/write on this repository.",
+  "rate-limited": "GitHub's rate limit was hit. Try again in a few minutes.",
+  unavailable: "Couldn't reach GitHub. Try again.",
+};
+
+/** The issue tracker refused or failed a request. The message is safe to show the owner. */
+export class IssueTrackerError extends Error {
+  constructor(
+    readonly reason: IssueTrackerFailure,
+    options?: { cause?: unknown },
+  ) {
+    super(FAILURE_MESSAGES[reason], options);
+    this.name = "IssueTrackerError";
+  }
+}
+
 /** Issue reporting as configured on the server: who may report, and where reports go. */
 export interface IssueReporting {
   tracker: IssueTracker;
@@ -274,21 +294,29 @@ function formatLocal(date: Date, timezone: string): string {
 export interface InMemoryIssueTracker extends IssueTracker {
   readonly issues: (IssueDraft & ReportedIssue)[];
   readonly images: { path: string; contentType: string; bytes: Uint8Array; url: string }[];
+  /** Every call fails with this error from now on; null to recover. */
+  failWith(error: IssueTrackerError | null): void;
 }
 
 /** An IssueTracker that keeps everything in memory: for tests and the e2e server. */
 export function inMemoryIssueTracker(): InMemoryIssueTracker {
   const issues: (IssueDraft & ReportedIssue)[] = [];
   const images: InMemoryIssueTracker["images"] = [];
+  let failure: IssueTrackerError | null = null;
   return {
     issues,
     images,
+    failWith(error) {
+      failure = error;
+    },
     async uploadImage(image) {
+      if (failure) throw failure;
       const url = `https://issue-tracker.test/images/${image.path}`;
       images.push({ ...image, url });
       return { url };
     },
     async createIssue(draft) {
+      if (failure) throw failure;
       const number = issues.length + 1;
       const issue = { ...draft, number, url: `https://issue-tracker.test/issues/${number}` };
       issues.push(issue);

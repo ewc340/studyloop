@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 // The owner as configured for the e2e server (ISSUE_REPORTING_OWNER_EMAIL in playwright.config.ts),
 // which also swaps GitHub for an in-memory issue tracker.
@@ -17,13 +17,12 @@ test.describe("as the owner", () => {
     await page.getByRole("button", { name: "Create Topic" }).click();
     await expect(page.getByRole("heading", { level: 1, name: topicName })).toBeVisible();
 
-    await page.getByRole("button", { name: "Report issue" }).click();
-    const sheet = page.getByRole("dialog");
+    const { sheet, masking } = await captureOnSettledPage(
+      page,
+      page.getByRole("heading", { level: 1, name: topicName }),
+      "Timeline",
+    );
     await expect(sheet.getByRole("heading", { name: "Report an issue" })).toBeVisible();
-
-    const capture = sheet.getByRole("img", { name: "Capture of this page, private content masked" });
-    await expect(capture).toBeVisible();
-    const masking = await maskingOf(page, "Timeline");
     expect(masking.privateElements).toBeGreaterThanOrEqual(2);
     expect(masking.unmaskedPrivateElements).toEqual([]);
     expect(masking.publicTextVisible).toBe(true);
@@ -66,10 +65,11 @@ test.describe("as the owner", () => {
 
     await page.goto(`/topics?q=${encodeURIComponent(topicName)}`);
     await expect(page.getByTestId("topic-list")).toContainText(topicName);
-    await page.getByRole("button", { name: "Report issue" }).click();
-    await expect(page.getByRole("img", { name: "Capture of this page, private content masked" })).toBeVisible();
-
-    const masking = await maskingOf(page, "Topics");
+    const { masking } = await captureOnSettledPage(
+      page,
+      page.getByTestId("topic-list").getByText(topicName),
+      "Topics",
+    );
     // The search box, and the Topic's name and description.
     expect(masking.privateElements).toBe(3);
     expect(masking.unmaskedPrivateElements).toEqual([]);
@@ -96,6 +96,41 @@ test("other Learners don't see the Report issue control", async ({ page }) => {
  * Compares the page capture with the live page: every private element's area in the capture must be
  * solid mask colour, and some public text must still show (so the check can fail).
  */
+const CAPTURE_ALT = "Capture of this page, private content masked";
+
+/**
+ * Opens the report sheet on a settled page and measures its capture's masking.
+ *
+ * In dev mode Next can reload a page while compiling code for the first time. A capture taken across
+ * that reload shows the loading state instead of the page, and measuring it against the re-rendered
+ * page is meaningless (this made the masking test flaky in CI). So an attempt only counts if the page
+ * didn't navigate while the sheet was opened and measured; otherwise reload and try again.
+ */
+async function captureOnSettledPage(page: Page, ready: Locator, publicHeadingText: string) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    let navigated = false;
+    const onNavigation = (frame: unknown) => {
+      if (frame === page.mainFrame()) navigated = true;
+    };
+    await expect(ready).toBeVisible();
+    page.on("framenavigated", onNavigation);
+    try {
+      await page.getByRole("button", { name: "Report issue" }).click();
+      await expect(page.getByRole("img", { name: CAPTURE_ALT })).toBeVisible();
+      const masking = await maskingOf(page, publicHeadingText);
+      if (!navigated) return { sheet: page.getByRole("dialog"), masking };
+    } catch (error) {
+      if (!navigated) throw error;
+    } finally {
+      page.off("framenavigated", onNavigation);
+    }
+    test.info().annotations.push({ type: "settled-capture-retry", description: `page reloaded during attempt ${attempt}` });
+    console.log(`[settled-capture] page reloaded during attempt ${attempt}; retrying`);
+    await page.reload();
+  }
+  throw new Error("The page kept reloading; no settled capture after 3 attempts");
+}
+
 async function maskingOf(page: Page, publicHeadingText: string) {
   return page.evaluate(async (headingText) => {
     const MASK = [0xa1, 0xa1, 0xaa];

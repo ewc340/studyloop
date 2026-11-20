@@ -1,7 +1,29 @@
-node_modules/
-.env
-.env.*
+# dependencies
+/node_modules
+
+# testing
+/coverage
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
+# next.js
+/.next/
+/out/
+/build
+next-env.d.ts
+*.tsbuildinfo
+
+# env files (only the example is committed)
+.env*
 !.env.example
-.next/
+
+# backups / dumps
 *.dump
 backups/
+
+# misc
+.DS_Store
+*.pem
+npm-debug.log*

@@ -1,5 +1,15 @@
 # studyloop
 
+@AGENTS.md
+
+## Working in this repo
+
+- Node 24 (`nvm use`); Postgres via `npm run db:up`.
+- Domain logic goes in `src/core` behind its public interface (`src/core/index.ts`); never import Next.js there. UI code in `src/app` stays a thin adapter.
+- Tests exercise the core's public interface against real Postgres using `useTestContext()` (fake Clock, tables truncated per test). Don't mock the database or internal modules.
+- Before pushing, `npm run check` must pass (lint, typecheck, core tests, e2e).
+- After changing `src/core/db/schema.ts`, run `npm run db:generate` and commit the migration.
+
 ## Agent skills
 
 ### Issue tracker

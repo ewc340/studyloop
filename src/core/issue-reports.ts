@@ -88,14 +88,28 @@ async function requireOwner(ctx: LearnerContext, reporting: IssueReporting): Pro
   return owner;
 }
 
+/** A report as the preview sees it: images are described but their bytes aren't needed. */
+export interface IssueReportPreview extends Omit<IssueReport, "images"> {
+  images: Omit<IssueReportImage, "bytes">[];
+}
+
+/** Exactly the issue `reportIssue` would post, except that images aren't uploaded yet. Uploads nothing. */
+export async function previewIssueReport(
+  ctx: LearnerContext,
+  reporting: IssueReporting,
+  report: IssueReportPreview,
+): Promise<IssueDraft> {
+  const facts = await serverFacts(ctx, reporting);
+  return draftIssue(report, facts, report.images.map(() => null));
+}
+
 /** Reports an issue as the acting Learner, who must be the owner. */
 export async function reportIssue(
   ctx: LearnerContext,
   reporting: IssueReporting,
   report: IssueReport,
 ): Promise<ReportedIssue> {
-  const owner = await requireOwner(ctx, reporting);
-  const facts = { appVersion: reporting.appVersion, reportedAt: ctx.clock.now(), timezone: owner.timezone };
+  const facts = await serverFacts(ctx, reporting);
   const imageUrls: string[] = [];
   for (const image of report.images) {
     const path = `${facts.reportedAt.toISOString().slice(0, 10)}/${crypto.randomUUID()}-${fileName(image)}`;
@@ -130,6 +144,14 @@ interface ServerFacts {
   timezone: string;
 }
 
+/** Checks the acting Learner is the owner and gathers what the server adds to their report. */
+async function serverFacts(ctx: LearnerContext, reporting: IssueReporting): Promise<ServerFacts> {
+  const owner = await requireOwner(ctx, reporting);
+  return { appVersion: reporting.appVersion, reportedAt: ctx.clock.now(), timezone: owner.timezone };
+}
+
+const NOT_UPLOADED_YET = "uploaded when you submit";
+
 /** Viewports up to this width are phones (below Tailwind's `md` breakpoint). */
 const PHONE_MAX_WIDTH = 767;
 
@@ -137,7 +159,7 @@ const PHONE_MAX_WIDTH = 767;
  * The issue for a report. `imageUrls` holds each image's URL in `report.images` order, or null
  * while it isn't uploaded yet (a preview), shown as a placeholder.
  */
-function draftIssue(report: IssueReport, facts: ServerFacts, imageUrls: (string | null)[]): IssueDraft {
+function draftIssue(report: IssueReportPreview, facts: ServerFacts, imageUrls: (string | null)[]): IssueDraft {
   const description = report.description.trim();
   const { page } = report;
   const { width, height } = page.viewport;
@@ -152,7 +174,7 @@ function draftIssue(report: IssueReport, facts: ServerFacts, imageUrls: (string 
   ];
   let attachmentNumber = 0;
   const screenshots = report.images.map((image, index) => {
-    const url = imageUrls[index] ?? "(uploaded when you submit)";
+    const url = imageUrls[index] ?? NOT_UPLOADED_YET;
     if (image.kind === "page-capture") {
       return `**Page capture** (private content masked)\n\n![Page capture](${url})`;
     }

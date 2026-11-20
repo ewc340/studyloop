@@ -3,6 +3,7 @@ import {
   canReportIssues,
   inMemoryIssueTracker,
   NotIssueReporterError,
+  previewIssueReport,
   reportIssue,
   setLearnerTimezone,
   type IssueReport,
@@ -126,6 +127,35 @@ describe("reporting an issue", () => {
     expect(tracker.images[1].path).toMatch(/^2026-11-20\/[0-9a-f-]{36}-screenshot-2026-11-20-at-10-03\.png$/);
   });
 
+  it("the preview is exactly what gets posted, with images marked as uploaded on submit", async () => {
+    const tracker = inMemoryIssueTracker();
+    const owner = await actingAsOwner();
+    const report = bugReport({
+      images: [{ kind: "page-capture", name: "page.png", contentType: "image/png", bytes: png("capture") }],
+    });
+
+    const preview = await previewIssueReport(owner, reportingWith(tracker), report);
+    await reportIssue(owner, reportingWith(tracker), report);
+
+    expect(tracker.images).toHaveLength(1);
+    const posted = tracker.issues[0];
+    expect(preview.title).toBe(posted.title);
+    expect(preview.labels).toEqual(posted.labels);
+    expect(preview.body).toContain("![Page capture](uploaded when you submit)");
+    expect(preview.body.replace("uploaded when you submit", tracker.images[0].url)).toBe(posted.body);
+  });
+
+  it("a preview never uploads anything and needs no image bytes", async () => {
+    const tracker = inMemoryIssueTracker();
+    const report = bugReport({ images: [{ kind: "attachment", name: "a.png", contentType: "image/png" }] });
+
+    const preview = await previewIssueReport(await actingAsOwner(), reportingWith(tracker), report);
+
+    expect(preview.body).toContain("![Attachment 1](uploaded when you submit)");
+    expect(tracker.images).toHaveLength(0);
+    expect(tracker.issues).toHaveLength(0);
+  });
+
   it("only the owner may report issues", async () => {
     const tracker = inMemoryIssueTracker();
     const reporting = reportingWith(tracker);
@@ -136,6 +166,7 @@ describe("reporting an issue", () => {
     expect(await canReportIssues(someoneElse, reporting)).toBe(false);
     expect(await canReportIssues(owner, null)).toBe(false);
     await expect(reportIssue(someoneElse, reporting, bugReport())).rejects.toThrow(NotIssueReporterError);
+    await expect(previewIssueReport(someoneElse, reporting, bugReport())).rejects.toThrow(NotIssueReporterError);
     expect(tracker.issues).toHaveLength(0);
   });
 });

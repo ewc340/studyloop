@@ -4,10 +4,12 @@ import {
   FutureDailyEntryError,
   getDailyEntry,
   getToday,
+  InvalidConfidenceError,
   InvalidDailyEntryError,
   listDailyEntries,
   saveDailyEntry,
   setLearnerTimezone,
+  TopicNotFoundError,
 } from "@/core";
 import { useTestContext } from "@/test/core-harness";
 import { actingAsNewLearner } from "@/test/learners";
@@ -135,6 +137,86 @@ describe("Daily Entries", () => {
     it.each(["2026-02-30", "2026-1-1", "yesterday", ""])("rejects %j, which isn't a calendar date", async (date) => {
       const ada = await actingAsNewLearner(core.ctx);
       await expect(saveDailyEntry(ada, { date, body: "x", topics: [] })).rejects.toBeInstanceOf(
+        InvalidDailyEntryError,
+      );
+    });
+  });
+
+  describe("Confidence", () => {
+    it.each([0, 6, 2.5, -1, Number.NaN])("rejects %s, which isn't a whole number from 1 to 5", async (confidence) => {
+      const ada = await actingAsNewLearner(core.ctx);
+      const caching = await createTopic(ada, { name: "Caching" });
+
+      await expect(
+        saveDailyEntry(ada, { date: "2026-01-01", body: "x", topics: [{ topicId: caching.id, confidence }] }),
+      ).rejects.toBeInstanceOf(InvalidConfidenceError);
+      expect(await listDailyEntries(ada)).toEqual([]);
+    });
+
+    it("accepts every rating from 1 to 5", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      const topics = [];
+      for (const name of ["A", "B", "C", "D", "E"]) topics.push(await createTopic(ada, { name }));
+
+      const entry = await saveDailyEntry(ada, {
+        date: "2026-01-01",
+        body: "",
+        topics: topics.map((t, i) => ({ topicId: t.id, confidence: i + 1 })),
+      });
+      expect(entry.topics.map((t) => t.confidence)).toEqual([1, 2, 3, 4, 5]);
+    });
+  });
+
+  describe("tagging Topics", () => {
+    it("can't tag another Learner's Topic", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      const grace = await actingAsNewLearner(core.ctx);
+      const gracesTopic = await createTopic(grace, { name: "Caching" });
+
+      await expect(
+        saveDailyEntry(ada, { date: "2026-01-01", body: "x", topics: [{ topicId: gracesTopic.id, confidence: 3 }] }),
+      ).rejects.toBeInstanceOf(TopicNotFoundError);
+      expect(await listDailyEntries(ada)).toEqual([]);
+    });
+
+    it("tags a Topic at most once, with one Confidence", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      const caching = await createTopic(ada, { name: "Caching" });
+
+      await expect(
+        saveDailyEntry(ada, {
+          date: "2026-01-01",
+          body: "x",
+          topics: [
+            { topicId: caching.id, confidence: 2 },
+            { topicId: caching.id, confidence: 4 },
+          ],
+        }),
+      ).rejects.toBeInstanceOf(InvalidDailyEntryError);
+    });
+  });
+
+  describe("what was learned", () => {
+    it("drops surrounding whitespace", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      const entry = await saveDailyEntry(ada, { date: "2026-01-01", body: "  Read the RFC \n", topics: [] });
+      expect(entry.body).toBe("Read the RFC");
+    });
+
+    it("may be left blank when a Topic is tagged", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      const caching = await createTopic(ada, { name: "Caching" });
+      const entry = await saveDailyEntry(ada, {
+        date: "2026-01-01",
+        body: " ",
+        topics: [{ topicId: caching.id, confidence: 3 }],
+      });
+      expect(entry.body).toBe("");
+    });
+
+    it("rejects an entry with nothing written and no Topics", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      await expect(saveDailyEntry(ada, { date: "2026-01-01", body: "  ", topics: [] })).rejects.toBeInstanceOf(
         InvalidDailyEntryError,
       );
     });

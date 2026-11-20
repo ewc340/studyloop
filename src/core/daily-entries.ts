@@ -2,7 +2,7 @@ import { and, asc, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import type { LearnerContext } from "./context";
 import { dailyEntry, dailyEntryTopic, topic } from "./db/schema";
 import { getLearner } from "./learner";
-import { topicId, type Topic, type TopicId } from "./topics";
+import { isUuid, topicId, TopicNotFoundError, type Topic, type TopicId } from "./topics";
 
 /** A calendar date in the Learner's own timezone, as `YYYY-MM-DD`. */
 export type CalendarDate = string;
@@ -44,6 +44,31 @@ export class FutureDailyEntryError extends Error {
   }
 }
 
+/** A Confidence must be a whole number from 1 to 5. */
+export class InvalidConfidenceError extends Error {
+  constructor(readonly confidence: number) {
+    super(`Confidence must be a whole number from 1 to 5, not ${confidence}`);
+    this.name = "InvalidConfidenceError";
+  }
+}
+
+export function isConfidence(value: number): value is Confidence {
+  return Number.isInteger(value) && value >= 1 && value <= 5;
+}
+
+/** Throws TopicNotFoundError unless every id names one of the acting Learner's Topics. */
+async function requireOwnTopics(ctx: LearnerContext, ids: TopicId[]): Promise<void> {
+  const malformed = ids.find((id) => !isUuid(id));
+  if (malformed) throw new TopicNotFoundError(malformed);
+  if (ids.length === 0) return;
+  const found = await ctx.db
+    .select({ id: topic.id })
+    .from(topic)
+    .where(and(eq(topic.userId, ctx.learnerId), inArray(topic.id, ids)));
+  const missing = ids.find((id) => !found.some((row) => row.id === id));
+  if (missing) throw new TopicNotFoundError(missing);
+}
+
 /** Whether `date` is a real calendar date written as `YYYY-MM-DD`. */
 export function isCalendarDate(date: string): date is CalendarDate {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
@@ -64,14 +89,26 @@ export async function getToday(ctx: LearnerContext): Promise<CalendarDate> {
  */
 export async function saveDailyEntry(ctx: LearnerContext, input: DailyEntryInput): Promise<DailyEntry> {
   if (!isCalendarDate(input.date)) throw new InvalidDailyEntryError(`Not a calendar date: ${input.date}`);
+  const body = input.body.trim();
+  if (!body && input.topics.length === 0) {
+    throw new InvalidDailyEntryError("Write what you worked on, or tag a Topic");
+  }
+  for (const { confidence } of input.topics) {
+    if (!isConfidence(confidence)) throw new InvalidConfidenceError(confidence);
+  }
+  const topicIds = input.topics.map((t) => t.topicId);
+  if (new Set(topicIds).size !== topicIds.length) {
+    throw new InvalidDailyEntryError("Each Topic can be tagged only once");
+  }
   // YYYY-MM-DD strings sort chronologically.
   if (input.date > (await getToday(ctx))) throw new FutureDailyEntryError(input.date);
+  await requireOwnTopics(ctx, topicIds);
 
   await ctx.db.transaction(async (tx) => {
     const [row] = await tx
       .insert(dailyEntry)
-      .values({ userId: ctx.learnerId, date: input.date, body: input.body })
-      .onConflictDoUpdate({ target: [dailyEntry.userId, dailyEntry.date], set: { body: input.body } })
+      .values({ userId: ctx.learnerId, date: input.date, body })
+      .onConflictDoUpdate({ target: [dailyEntry.userId, dailyEntry.date], set: { body } })
       .returning({ id: dailyEntry.id });
     await tx.delete(dailyEntryTopic).where(eq(dailyEntryTopic.dailyEntryId, row.id));
     if (input.topics.length > 0) {

@@ -11,6 +11,7 @@ Run `bash ralph/sync-main.sh` (start from the latest `origin/main`), then `bash 
 Run `bash ralph/next-ticket.sh`. It prints one line:
 
 - `NONE` → end your run with the final line `NO_WORK`.
+- `WAIT` → the owner already has `AFK_WIP_LIMIT` (default 5) or more agent PRs ready for review; starting another would only grow the queue. End your run with the final line `WAITING`.
 - `RESUME <n>` → a previous run stopped mid-ticket. Check out the existing branch for #<n> (`git fetch origin` then `git branch -r | grep "origin/claude/<n>-"`), read the draft PR and recent commits, and continue from where it left off.
 - `START <n>` → claim it: `gh issue edit <n> --add-assignee @me`. Then branch from the latest main: `git fetch origin && git checkout -b claude/<n>-<short-slug> origin/main` (the `claude/` prefix is required: cloud runs may only push such branches).
 
@@ -61,4 +62,4 @@ If the ticket is ambiguous, contradicts the spec or an ADR, or you are blocked a
 - Commit `.env`, real secrets, or real personal data.
 - Skip or weaken tests to make CI pass.
 
-Your final line must be exactly one of: `NO_WORK`, `DONE #<n> <pr-url>`, `BLOCKED #<n> <reason>`.
+Your final line must be exactly one of: `NO_WORK`, `WAITING`, `DONE #<n> <pr-url>`, `BLOCKED #<n> <reason>`.

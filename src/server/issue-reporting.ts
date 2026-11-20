@@ -10,8 +10,6 @@ const DEFAULT_REPOSITORY = "ewc340/studyloop";
 export interface ServerIssueReporting extends IssueReporting {
   /** `owner/name` of the repository issues are posted to. */
   repository: string;
-  /** Whether reports go to the in-memory tracker (e2e) instead of GitHub. */
-  fake: boolean;
 }
 
 /**
@@ -26,15 +24,19 @@ export function issueReportingFrom(env: Env = process.env): ServerIssueReporting
 
   const repository = env.ISSUE_REPORTING_REPOSITORY?.trim() || DEFAULT_REPOSITORY;
   const fake = env.ISSUE_REPORTING_FAKE_TRACKER === "1" && isTestAuthBypassEnabled(env);
-  const tracker = fake ? sharedFakeTracker() : githubIssueTracker({ token, repository });
-  return { tracker, ownerEmail, appVersion: appVersion(env), repository, fake };
+  const tracker = sharedTracker(fake ? "in-memory" : `github:${repository}:${token}`, () =>
+    fake ? inMemoryIssueTracker() : githubIssueTracker({ token, repository }),
+  );
+  return { tracker, ownerEmail, appVersion: appVersion(env), repository };
 }
 
-const globalForFake = globalThis as unknown as { studyloopFakeIssueTracker?: IssueTracker };
+const globalForTrackers = globalThis as unknown as { studyloopIssueTrackers?: Map<string, IssueTracker> };
 
-function sharedFakeTracker(): IssueTracker {
-  globalForFake.studyloopFakeIssueTracker ??= inMemoryIssueTracker();
-  return globalForFake.studyloopFakeIssueTracker;
+/** One tracker per configuration per process (across dev hot reloads), so it keeps what it learned. */
+function sharedTracker(key: string, create: () => IssueTracker): IssueTracker {
+  const trackers = (globalForTrackers.studyloopIssueTrackers ??= new Map());
+  if (!trackers.has(key)) trackers.set(key, create());
+  return trackers.get(key)!;
 }
 
 let gitCommit: string | undefined;

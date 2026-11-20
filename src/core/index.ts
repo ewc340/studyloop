@@ -32,14 +32,7 @@ export {
   type TopicTimelineEntry,
 } from "./topics";
 
-export { githubIssueTracker, type GitHubIssueTrackerOptions } from "./github-issue-tracker";
-
-// Infrastructure for adapters, scripts and the test harness
-export { connect, databaseUrl, type Db, type DbHandle } from "./db/client";
-export { runMigrations } from "./db/migrate";
-export { localDatabaseUrls } from "./db/local";
-export { createDatabaseIfMissing, dropDatabase, withDatabaseName } from "./db/admin";
-export { authTables } from "./db/auth-tables";
+// Owner tooling: issue reporting (not part of the learning domain)
 export {
   canReportIssues,
   inMemoryIssueTracker,
@@ -61,3 +54,11 @@ export {
   type IssueTrackerFailure,
   type ReportedIssue,
 } from "./issue-reports";
+export { githubIssueTracker, type GitHubIssueTrackerOptions } from "./github-issue-tracker";
+
+// Infrastructure for adapters, scripts and the test harness
+export { connect, databaseUrl, type Db, type DbHandle } from "./db/client";
+export { runMigrations } from "./db/migrate";
+export { localDatabaseUrls } from "./db/local";
+export { createDatabaseIfMissing, dropDatabase, withDatabaseName } from "./db/admin";
+export { authTables } from "./db/auth-tables";

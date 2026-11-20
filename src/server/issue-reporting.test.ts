@@ -25,7 +25,8 @@ describe("issue reporting configuration", () => {
 
   it("uses the in-memory tracker only under the e2e auth bypass", () => {
     const fake = { ...configured, ISSUE_REPORTING_FAKE_TRACKER: "1" };
-    expect(issueReportingFrom({ ...fake, E2E_AUTH_BYPASS: "1" })?.fake).toBe(true);
-    expect(issueReportingFrom(fake)?.fake).toBe(false);
+    const inMemory = (env: Record<string, string>) => "issues" in issueReportingFrom(env)!.tracker;
+    expect(inMemory({ ...fake, E2E_AUTH_BYPASS: "1" })).toBe(true);
+    expect(inMemory(fake)).toBe(false);
   });
 });

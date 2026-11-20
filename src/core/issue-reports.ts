@@ -8,6 +8,12 @@ import { getLearner, type Learner } from "./learner";
 
 export type IssueReportType = "bug" | "idea";
 
+/** How each type of report reads in the issue, and the GitHub label that marks it. */
+const REPORT_TYPES: Record<IssueReportType, { name: string; label: string }> = {
+  bug: { name: "Bug", label: "bug" },
+  idea: { name: "Idea", label: "enhancement" },
+};
+
 /** Where the report was made, as the browser saw it. */
 export interface IssueReportPage {
   /** Path and query of the page, e.g. `/topics?q=cach`. Query values are redacted before posting. */
@@ -179,7 +185,7 @@ export const ISSUE_REPORT_LIMITS = {
 } as const;
 
 function validate(report: IssueReportPreview | IssueReport): void {
-  if (report.type !== "bug" && report.type !== "idea") throw new InvalidIssueReportError("Choose bug or idea");
+  if (!Object.hasOwn(REPORT_TYPES, report.type)) throw new InvalidIssueReportError("Choose bug or idea");
   if (!report.description.trim()) throw new InvalidIssueReportError("Describe the problem or idea");
   if (report.images.length > ISSUE_REPORT_LIMITS.maxImages) {
     throw new InvalidIssueReportError(`At most ${ISSUE_REPORT_LIMITS.maxImages} images per report`);
@@ -189,7 +195,7 @@ function validate(report: IssueReportPreview | IssueReport): void {
       throw new InvalidIssueReportError(`${image.name} isn't a PNG, JPEG, WebP or GIF image`);
     }
     if ("bytes" in image && image.bytes.byteLength > ISSUE_REPORT_LIMITS.maxImageBytes) {
-      throw new InvalidIssueReportError(`${image.name} is over 5 MB`);
+      throw new InvalidIssueReportError(`${image.name} is over ${ISSUE_REPORT_LIMITS.maxImageBytes / 1024 / 1024} MB`);
     }
   }
 }
@@ -219,7 +225,7 @@ function draftIssue(report: IssueReportPreview, facts: ServerFacts, imageUrls: (
   const { page } = report;
   const { width, height } = page.viewport;
   const context: [string, string][] = [
-    ["Type", report.type === "bug" ? "Bug" : "Idea"],
+    ["Type", REPORT_TYPES[report.type].name],
     ["Page", code(redactQueryValues(page.url))],
     ["Route", code(page.route)],
     ["Viewport", `${width}×${height} (${width <= PHONE_MAX_WIDTH ? "phone" : "desktop"})`],
@@ -246,7 +252,7 @@ function draftIssue(report: IssueReportPreview, facts: ServerFacts, imageUrls: (
   return {
     title: shorten(description.split("\n")[0].trim(), MAX_TITLE_LENGTH),
     body,
-    labels: ["needs-triage", report.type === "bug" ? "bug" : "enhancement"],
+    labels: ["needs-triage", REPORT_TYPES[report.type].label],
   };
 }
 

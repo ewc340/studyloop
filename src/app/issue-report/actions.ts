@@ -19,9 +19,10 @@ export type IssueSubmitResult = { issue: ReportedIssue } | { error: string };
 
 /** The issue exactly as it will be posted, for the owner to check before sending. */
 export async function previewIssue(report: IssueReportPreview): Promise<IssuePreviewResult> {
+  // Outside the error handling, so a signed-out request still redirects to sign-in.
+  const ctx = await requireLearnerContext();
   return withReportingErrors(async () => {
-    const reporting = configured();
-    return { draft: await previewIssueReport(await requireLearnerContext(), reporting, toPreview(report)) };
+    return { draft: await previewIssueReport(ctx, requireIssueReporting(), toPreview(report)) };
   });
 }
 
@@ -30,8 +31,9 @@ export async function previewIssue(report: IssueReportPreview): Promise<IssuePre
  * file per entry in its `images`.
  */
 export async function submitIssue(formData: FormData): Promise<IssueSubmitResult> {
+  const ctx = await requireLearnerContext();
   return withReportingErrors(async () => {
-    const reporting = configured();
+    const reporting = requireIssueReporting();
     const preview = toPreview(parseJson(formData.get("report")));
     const images: IssueReportImage[] = await Promise.all(
       preview.images.map(async (image, index) => {
@@ -40,11 +42,12 @@ export async function submitIssue(formData: FormData): Promise<IssueSubmitResult
         return { ...image, contentType: file.type, bytes: new Uint8Array(await file.arrayBuffer()) };
       }),
     );
-    return { issue: await reportIssue(await requireLearnerContext(), reporting, { ...preview, images }) };
+    return { issue: await reportIssue(ctx, reporting, { ...preview, images }) };
   });
 }
 
-function configured() {
+/** Issue reporting as configured, or NotIssueReporterError when it isn't. */
+function requireIssueReporting() {
   const reporting = issueReportingFrom();
   if (!reporting) throw new NotIssueReporterError();
   return reporting;

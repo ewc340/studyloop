@@ -23,7 +23,7 @@ test.describe("as the owner", () => {
 
     const capture = sheet.getByRole("img", { name: "Capture of this page, private content masked" });
     await expect(capture).toBeVisible();
-    const masking = await maskingOf(page);
+    const masking = await maskingOf(page, "Timeline");
     expect(masking.privateElements).toBeGreaterThanOrEqual(2);
     expect(masking.unmaskedPrivateElements).toEqual([]);
     expect(masking.publicTextVisible).toBe(true);
@@ -56,6 +56,26 @@ test.describe("as the owner", () => {
     await expect(link).toHaveAttribute("href", /^https:\/\/issue-tracker\.test\/issues\/\d+$/);
   });
 
+  test("the capture of the Topics list masks names, descriptions and the search box", async ({ page }) => {
+    const topicName = `Searchable topic ${Date.now()}`;
+    await page.goto("/topics/new");
+    await page.getByLabel("Name").fill(topicName);
+    await page.getByLabel("Description").fill("Private description");
+    await page.getByRole("button", { name: "Create Topic" }).click();
+    await expect(page.getByRole("heading", { level: 1, name: topicName })).toBeVisible();
+
+    await page.goto(`/topics?q=${encodeURIComponent(topicName)}`);
+    await expect(page.getByTestId("topic-list")).toContainText(topicName);
+    await page.getByRole("button", { name: "Report issue" }).click();
+    await expect(page.getByRole("img", { name: "Capture of this page, private content masked" })).toBeVisible();
+
+    const masking = await maskingOf(page, "Topics");
+    // The search box, and the Topic's name and description.
+    expect(masking.privateElements).toBe(3);
+    expect(masking.unmaskedPrivateElements).toEqual([]);
+    expect(masking.publicTextVisible).toBe(true);
+  });
+
   test("a report without a description isn't sent", async ({ page }) => {
     await page.goto("/topics");
     await page.getByRole("button", { name: "Report issue" }).click();
@@ -76,8 +96,8 @@ test("other Learners don't see the Report issue control", async ({ page }) => {
  * Compares the page capture with the live page: every private element's area in the capture must be
  * solid mask colour, and some public text must still show (so the check can fail).
  */
-async function maskingOf(page: Page) {
-  return page.evaluate(async () => {
+async function maskingOf(page: Page, publicHeadingText: string) {
+  return page.evaluate(async (headingText) => {
     const MASK = [0xa1, 0xa1, 0xaa];
     const img = document.querySelector<HTMLImageElement>('img[alt="Capture of this page, private content masked"]')!;
     await img.decode();
@@ -106,11 +126,15 @@ async function maskingOf(page: Page) {
       (element) => !element.closest("dialog") && element.getBoundingClientRect().width > 0,
     );
     const unmaskedPrivateElements = privateElements
-      .filter((element) => !samples(element).every(isMask))
+      // An element too small to sample counts as unmasked, so nothing passes unchecked.
+      .filter((element) => {
+        const points = samples(element);
+        return points.length === 0 || !points.every(isMask);
+      })
       .map((element) => element.outerHTML.slice(0, 80));
-    const publicHeading = [...document.querySelectorAll("h2")].find((h) => h.textContent === "Timeline")!;
+    const publicHeading = [...document.querySelectorAll("h1, h2")].find((h) => h.textContent === headingText)!;
     const publicTextVisible = samples(publicHeading).some((rgb) => !isMask(rgb) && Math.max(...rgb) < 128);
 
     return { privateElements: privateElements.length, unmaskedPrivateElements, publicTextVisible };
-  });
+  }, publicHeadingText);
 }

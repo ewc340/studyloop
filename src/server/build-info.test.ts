@@ -1,28 +1,28 @@
 import { describe, expect, it } from "vitest";
-import { buildBadgeLabel, buildInfo } from "./build-info";
+import { buildBadge, buildInfo } from "./build-info";
 
 const checkout = () => ({ commit: "1a2b3c4", branch: "claude/29-qa-instances" });
 
 describe("build badge", () => {
   it("names the PR and commit in a PR's QA instance", () => {
-    expect(buildBadgeLabel({ NODE_ENV: "development", QA_PR: "31" }, checkout)).toBe("PR #31 · 1a2b3c4");
+    expect(buildBadge({ NODE_ENV: "development", QA_PR: "31" }, checkout)).toEqual({ name: "PR #31", commit: "1a2b3c4" });
   });
 
   it("names the branch and commit in plain dev", () => {
-    expect(buildBadgeLabel({ NODE_ENV: "development" }, checkout)).toBe("claude/29-qa-instances · 1a2b3c4");
+    expect(buildBadge({ NODE_ENV: "development" }, checkout)).toEqual({ name: "claude/29-qa-instances", commit: "1a2b3c4" });
   });
 
   it("says detached when no branch is checked out", () => {
     const detached = () => ({ commit: "1a2b3c4", branch: null });
-    expect(buildBadgeLabel({ NODE_ENV: "development" }, detached)).toBe("detached · 1a2b3c4");
+    expect(buildBadge({ NODE_ENV: "development" }, detached)).toEqual({ name: "detached", commit: "1a2b3c4" });
   });
 
   it("is hidden in production builds", () => {
-    expect(buildBadgeLabel({ NODE_ENV: "production", QA_PR: "31" }, checkout)).toBeNull();
+    expect(buildBadge({ NODE_ENV: "production", QA_PR: "31" }, checkout)).toBeNull();
   });
 
   it("is hidden in agent screenshot and e2e runs", () => {
-    expect(buildBadgeLabel({ NODE_ENV: "development", E2E_AUTH_BYPASS: "1" }, checkout)).toBeNull();
+    expect(buildBadge({ NODE_ENV: "development", E2E_AUTH_BYPASS: "1" }, checkout)).toBeNull();
   });
 });
 

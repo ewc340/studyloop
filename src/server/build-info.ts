@@ -48,13 +48,18 @@ export function buildInfo(env: Env = process.env, checkout: () => Checkout = rea
   return { commit, branch, ...(pullRequest ? { pullRequest } : {}) };
 }
 
+export interface BuildBadge {
+  /** `PR #<n>` in a QA instance, else the branch. */
+  name: string;
+  commit: string;
+}
+
 /**
- * The badge naming the build: `PR #<n> · <sha>` in a QA instance, `<branch> · <sha>` in plain dev.
- * Null in production and in agent screenshot/e2e runs (E2E_AUTH_BYPASS), where it would only be noise.
+ * The badge naming the build, shown as `<name> · <commit>`. Null in production and in agent
+ * screenshot/e2e runs (E2E_AUTH_BYPASS), where it would only be noise.
  */
-export function buildBadgeLabel(env: Env = process.env, checkout: () => Checkout = readCheckout): string | null {
+export function buildBadge(env: Env = process.env, checkout: () => Checkout = readCheckout): BuildBadge | null {
   if (env.NODE_ENV === "production" || env.E2E_AUTH_BYPASS === "1") return null;
   const build = buildInfo(env, checkout);
-  const name = build.pullRequest ? `PR #${build.pullRequest}` : (build.branch ?? "detached");
-  return `${name} · ${build.commit}`;
+  return { name: build.pullRequest ? `PR #${build.pullRequest}` : (build.branch ?? "detached"), commit: build.commit };
 }

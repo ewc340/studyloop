@@ -30,6 +30,11 @@ const phonePage = {
   userAgent: "Mozilla/5.0 (Linux; Android 14; Pixel 7) Mobile Safari/537.36",
 };
 
+/** Stand-in image bytes: the core never decodes images, so any distinct bytes will do. */
+function png(label: string): Uint8Array {
+  return new TextEncoder().encode(`\x89PNG ${label}`);
+}
+
 function bugReport(overrides: Partial<IssueReport> = {}): IssueReport {
   return {
     type: "bug",
@@ -92,6 +97,33 @@ describe("reporting an issue", () => {
     await reportIssue(await actingAsOwner(), reportingWith(tracker), bugReport({ page }));
     expect(tracker.issues[0].body).toContain("| Page | `/topics?q=…&page=…` |");
     expect(tracker.issues[0].body).not.toContain("Kafka");
+  });
+
+  it("the page capture and attached images are uploaded and embedded in the issue", async () => {
+    const tracker = inMemoryIssueTracker();
+    core.clock.set("2026-11-20T15:04:00Z");
+    const capture = png("capture");
+    const attachment = png("phone screenshot");
+
+    await reportIssue(
+      await actingAsOwner(),
+      reportingWith(tracker),
+      bugReport({
+        images: [
+          { kind: "page-capture", name: "page.png", contentType: "image/png", bytes: capture },
+          { kind: "attachment", name: "Screenshot 2026-11-20 at 10.03.png", contentType: "image/png", bytes: attachment },
+        ],
+      }),
+    );
+
+    expect(tracker.images.map((image) => image.bytes)).toEqual([capture, attachment]);
+    const [captureUrl, attachmentUrl] = tracker.images.map((image) => image.url);
+    const { body } = tracker.issues[0];
+    expect(body).toContain(`![Page capture](${captureUrl})`);
+    expect(body).toContain(`![Attachment 1](${attachmentUrl})`);
+    // Each upload gets its own path, dated, keeping a readable name.
+    expect(tracker.images[0].path).toMatch(/^2026-11-20\/[0-9a-f-]{36}-page\.png$/);
+    expect(tracker.images[1].path).toMatch(/^2026-11-20\/[0-9a-f-]{36}-screenshot-2026-11-20-at-10-03\.png$/);
   });
 
   it("only the owner may report issues", async () => {

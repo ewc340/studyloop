@@ -96,7 +96,31 @@ export async function reportIssue(
 ): Promise<ReportedIssue> {
   const owner = await requireOwner(ctx, reporting);
   const facts = { appVersion: reporting.appVersion, reportedAt: ctx.clock.now(), timezone: owner.timezone };
-  return reporting.tracker.createIssue(draftIssue(report, facts));
+  const imageUrls: string[] = [];
+  for (const image of report.images) {
+    const path = `${facts.reportedAt.toISOString().slice(0, 10)}/${crypto.randomUUID()}-${fileName(image)}`;
+    const { url } = await reporting.tracker.uploadImage({ path, contentType: image.contentType, bytes: image.bytes });
+    imageUrls.push(url);
+  }
+  return reporting.tracker.createIssue(draftIssue(report, facts, imageUrls));
+}
+
+const IMAGE_EXTENSIONS: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+  "image/gif": "gif",
+};
+
+/** A URL-safe file name that keeps the readable part of the original. */
+function fileName(image: IssueReportImage): string {
+  const base = image.name
+    .replace(/\.[a-z0-9]+$/i, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+  return `${base || "image"}.${IMAGE_EXTENSIONS[image.contentType] ?? "bin"}`;
 }
 
 /** What the server knows about a report that the browser doesn't. */
@@ -109,7 +133,11 @@ interface ServerFacts {
 /** Viewports up to this width are phones (below Tailwind's `md` breakpoint). */
 const PHONE_MAX_WIDTH = 767;
 
-function draftIssue(report: IssueReport, facts: ServerFacts): IssueDraft {
+/**
+ * The issue for a report. `imageUrls` holds each image's URL in `report.images` order, or null
+ * while it isn't uploaded yet (a preview), shown as a placeholder.
+ */
+function draftIssue(report: IssueReport, facts: ServerFacts, imageUrls: (string | null)[]): IssueDraft {
   const description = report.description.trim();
   const { page } = report;
   const { width, height } = page.viewport;
@@ -122,8 +150,18 @@ function draftIssue(report: IssueReport, facts: ServerFacts): IssueDraft {
     ["Browser", code(page.userAgent)],
     ["Reported", `${formatLocal(facts.reportedAt, facts.timezone)} (${facts.timezone})`],
   ];
+  let attachmentNumber = 0;
+  const screenshots = report.images.map((image, index) => {
+    const url = imageUrls[index] ?? "(uploaded when you submit)";
+    if (image.kind === "page-capture") {
+      return `**Page capture** (private content masked)\n\n![Page capture](${url})`;
+    }
+    attachmentNumber += 1;
+    return `**Attachment ${attachmentNumber}**\n\n![Attachment ${attachmentNumber}](${url})`;
+  });
   const body = [
     description,
+    ...(screenshots.length > 0 ? ["## Screenshots", ...screenshots] : []),
     "## Context",
     ["| | |", "| --- | --- |", ...context.map(([key, value]) => `| ${key} | ${value} |`)].join("\n"),
     "_Reported from the studyloop app._",

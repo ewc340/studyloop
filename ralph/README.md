@@ -53,7 +53,7 @@ An instance is:
 - a database `studyloop_pr_<n>`, first a **copy of your dev database** (taken with `pg_dump`, so `npm run dev` can keep running), then migrated with the PR's migrations. Re-running keeps it, so data you entered while testing survives an update; `--fresh` starts over from dev;
 - a dev server on port 3000 + PR number, or the next free port. Never 3100: e2e and agent screenshots reuse whatever server listens there. Its log is `.qa/<n>.log`.
 
-Your dev server's session cookie is shared across `localhost` ports, and the copy carries your session, so being signed in on `npm run dev` should sign you in on an instance too. If an instance shows the sign-in page, sign in on your dev server and run `npm run qa -- <n> --fresh`.
+**Signing in.** Browsers share one `localhost` session cookie across ports, and the copied database carries your dev session, so signing in on your dev server (`npm run dev`) *before* `npm run qa` should sign you in on every instance. Don't sign in on an instance itself: its new session exists only in its own database, and it replaces the shared cookie, signing you out of dev and the other instances. If that happens, sign in on dev again and re-copy with `npm run qa -- <n> --fresh`.
 
 **Build badge.** Outside production, every page shows which build it is, bottom centre: `PR #<n> · <sha>` in a QA instance, `<branch> · <sha>` in plain dev. Issues you file with the in-app reporter carry the same commit, plus the PR number when filed from a QA instance.
 

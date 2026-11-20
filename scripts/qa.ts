@@ -11,7 +11,7 @@
 // State and server logs live in .qa/ in this checkout.
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { databaseUrl, dropDatabase, createDatabaseIfMissing, withDatabaseName } from "@/core";
 import { instancePort, isPortFree } from "./qa/ports";
@@ -96,16 +96,29 @@ function isAlive(pid: number | null): pid is number {
   }
 }
 
+/**
+ * Whether the instance's recorded server is still running. Checks the process's working directory is
+ * the instance's worktree, so a pid reused after a reboot is never mistaken for (and signalled as) ours.
+ */
+function isOurServer(instance: Instance): instance is Instance & { pid: number } {
+  if (!isAlive(instance.pid)) return false;
+  const cwd = spawnSync("lsof", ["-a", "-p", String(instance.pid), "-d", "cwd", "-Fn"], { encoding: "utf8" });
+  if (!existsSync(instance.worktree)) return false;
+  return cwd.stdout.split("\n").includes(`n${realpathSync(instance.worktree)}`);
+}
+
 async function stopServer(instance: Instance) {
-  if (!isAlive(instance.pid)) return;
-  const group = -instance.pid;
-  try {
-    process.kill(group, "SIGTERM");
-  } catch {
-    return;
-  }
+  if (!isOurServer(instance)) return;
+  const signal = (name: NodeJS.Signals) => {
+    try {
+      process.kill(-instance.pid, name);
+    } catch {
+      // Already gone.
+    }
+  };
+  signal("SIGTERM");
   for (let i = 0; i < 50 && isAlive(instance.pid); i++) await sleep(200);
-  if (isAlive(instance.pid)) process.kill(group, "SIGKILL");
+  if (isAlive(instance.pid)) signal("SIGKILL");
   for (let i = 0; i < 25 && !(await isPortFree(instance.port)); i++) await sleep(200);
 }
 
@@ -129,12 +142,21 @@ function sleep(ms: number) {
 
 // --- Database
 
-/** Postgres's own tools, from the Compose database container, so their version always matches. */
+/**
+ * Copies with Postgres's own tools, from the Compose database container, so their version always
+ * matches. Inside the container the server is always localhost:5432, whatever port the host maps.
+ */
 function copyDatabase(sourceUrl: string, targetUrl: string) {
   const host = new URL(sourceUrl).hostname;
-  if (!["localhost", "127.0.0.1", "::1"].includes(host)) {
+  if (!["localhost", "127.0.0.1", "[::1]"].includes(host)) {
     throw new Error(`QA instances copy the local Docker database; DATABASE_URL points at ${host}`);
   }
+  const inContainer = (url: string) => {
+    const next = new URL(url);
+    next.hostname = "localhost";
+    next.port = "5432";
+    return next.toString();
+  };
   run(
     "docker",
     [
@@ -146,8 +168,8 @@ function copyDatabase(sourceUrl: string, targetUrl: string) {
       "-c",
       'set -euo pipefail; pg_dump --no-owner --no-acl "$1" | psql --quiet -v ON_ERROR_STOP=1 "$2" >/dev/null',
       "copy",
-      sourceUrl,
-      targetUrl,
+      inContainer(sourceUrl),
+      inContainer(targetUrl),
     ],
     { cwd: ROOT },
   );
@@ -170,6 +192,11 @@ function parsePr(value: string | undefined): number {
   return Number(value);
 }
 
+/** Where PR `pr`'s instance lives. */
+function instancePlace(pr: number) {
+  return { database: `studyloop_pr_${pr}`, worktree: path.resolve(ROOT, "..", `studyloop-pr-${pr}`) };
+}
+
 function lockfileHash(worktree: string): string {
   return createHash("sha256")
     .update(readFileSync(path.join(worktree, "package-lock.json")))
@@ -181,9 +208,8 @@ async function up(pr: number, fresh: boolean) {
   const previous = readInstance(pr);
   const devUrl = databaseUrl();
   const adminUrl = withDatabaseName(devUrl, "postgres");
-  const database = `studyloop_pr_${pr}`;
+  const { database, worktree } = instancePlace(pr);
   const databaseUrlForPr = withDatabaseName(devUrl, database);
-  const worktree = path.resolve(ROOT, "..", `studyloop-pr-${pr}`);
 
   step(`PR #${pr}: fetching its latest commit`);
   const { title } = JSON.parse(run("gh", ["pr", "view", String(pr), "--json", "title"], { cwd: ROOT })) as {
@@ -200,7 +226,8 @@ async function up(pr: number, fresh: boolean) {
 
   if (existsSync(worktree)) {
     step(`Updating ${worktree} to ${short}`);
-    run("git", ["checkout", "--quiet", "--detach", commit], { cwd: worktree });
+    // --force: the worktree is disposable, and `next dev` rewrites tracked files in it (AGENTS.md).
+    run("git", ["checkout", "--quiet", "--force", "--detach", commit], { cwd: worktree });
   } else {
     step(`Creating ${worktree} at ${short}`);
     run("git", ["worktree", "add", "--quiet", "--detach", worktree, commit], { cwd: ROOT });
@@ -222,7 +249,13 @@ async function up(pr: number, fresh: boolean) {
     step(`Copying the dev database ${new URL(devUrl).pathname.slice(1)} into ${database}`);
     await dropDatabase(adminUrl, database);
     await createDatabaseIfMissing(adminUrl, database);
-    copyDatabase(devUrl, databaseUrlForPr);
+    try {
+      copyDatabase(devUrl, databaseUrlForPr);
+    } catch (error) {
+      // Never leave a half-copied database for the next run to keep.
+      await dropDatabase(adminUrl, database);
+      throw error;
+    }
   } else {
     step(`Keeping ${database} (pass --fresh to re-copy the dev database)`);
   }
@@ -254,6 +287,7 @@ async function up(pr: number, fresh: boolean) {
     detached: true,
   });
   server.unref();
+  closeSync(log);
   const instance: Instance = {
     pr,
     title,
@@ -279,7 +313,7 @@ async function list() {
   }
   const rows = await Promise.all(
     instances.map(async (instance) => {
-      const running = isAlive(instance.pid) && !(await isPortFree(instance.port));
+      const running = isOurServer(instance) && !(await isPortFree(instance.port));
       return [
         `#${instance.pr}`,
         running ? `http://localhost:${instance.port}` : "stopped (npm run qa to restart)",
@@ -298,8 +332,7 @@ async function list() {
 async function done(pr: number) {
   const instance = readInstance(pr);
   const devUrl = databaseUrl();
-  const database = `studyloop_pr_${pr}`;
-  const worktree = path.resolve(ROOT, "..", `studyloop-pr-${pr}`);
+  const { database, worktree } = instancePlace(pr);
 
   if (instance) {
     step(`Stopping the server for PR #${pr}`);

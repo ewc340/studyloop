@@ -1,6 +1,7 @@
 // Which build is running: the commit, the branch, and the pull request when this is a PR's QA
 // instance (`npm run qa <pr>` sets QA_PR). Owner tooling, used by the build badge and issue reports.
 import { execFileSync } from "node:child_process";
+import { isTestAuthBypassEnabled } from "./test-auth-bypass";
 
 type Env = Record<string, string | undefined>;
 
@@ -59,7 +60,7 @@ export interface BuildBadge {
  * screenshot/e2e runs (E2E_AUTH_BYPASS), where it would only be noise.
  */
 export function buildBadge(env: Env = process.env, checkout: () => Checkout = readCheckout): BuildBadge | null {
-  if (env.NODE_ENV === "production" || env.E2E_AUTH_BYPASS === "1") return null;
+  if (env.NODE_ENV === "production" || isTestAuthBypassEnabled(env)) return null;
   const build = buildInfo(env, checkout);
   return { name: build.pullRequest ? `PR #${build.pullRequest}` : (build.branch ?? "detached"), commit: build.commit };
 }

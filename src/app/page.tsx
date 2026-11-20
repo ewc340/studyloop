@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Suspense } from "react";
 import { getHealth, getLearner } from "@/core";
 import { requireLearnerContext } from "@/server/learner";
@@ -20,6 +21,11 @@ async function SignedInHome() {
       <p className="text-zinc-700 dark:text-zinc-300">
         Track what you learn, connect topics, and close the gaps your interviews expose.
       </p>
+      <nav>
+        <Link href="/topics" className="font-medium text-blue-700 underline dark:text-blue-400">
+          Topics
+        </Link>
+      </nav>
       <p data-testid="health" className="text-sm text-zinc-600 dark:text-zinc-400">
         Database: {health.database} · {health.migrationsApplied} migration
         {health.migrationsApplied === 1 ? "" : "s"} applied

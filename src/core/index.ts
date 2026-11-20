@@ -15,6 +15,22 @@ export {
   type Learner,
   type NewLearner,
 } from "./learner";
+export {
+  createTopic,
+  DuplicateTopicNameError,
+  findOrCreateTopic,
+  findTopics,
+  getTopicPage,
+  InvalidTopicError,
+  topicId,
+  TopicNotFoundError,
+  type NewTopic,
+  type Topic,
+  type TopicId,
+  type TopicPage,
+  type TopicSearch,
+  type TopicTimelineEntry,
+} from "./topics";
 
 // Infrastructure for adapters, scripts and the test harness
 export { connect, databaseUrl, type Db, type DbHandle } from "./db/client";

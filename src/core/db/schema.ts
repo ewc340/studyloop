@@ -1,5 +1,6 @@
 // Drizzle table definitions. Auth tables follow Better Auth's core schema; the `user` row is the Learner.
-import { boolean, index, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { boolean, index, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -68,4 +69,19 @@ export const verification = pgTable(
     ...timestamps,
   },
   (t) => [index("verification_identifier_idx").on(t.identifier)],
+);
+
+/** A Topic: a named subject or skill a Learner is learning. Names are unique per Learner, ignoring case. */
+export const topic = pgTable(
+  "topic",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    description: text("description"),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("topic_user_id_name_key").on(t.userId, sql`lower(${t.name})`)],
 );

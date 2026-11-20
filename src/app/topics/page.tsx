@@ -20,6 +20,7 @@ async function TopicList({ searchParams }: { searchParams: PageProps<"/topics">[
           type="search"
           name="q"
           defaultValue={query}
+          data-private
           placeholder="Search Topics"
           className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-transparent px-3 py-2.5 text-base dark:border-zinc-700"
         />
@@ -36,9 +37,13 @@ async function TopicList({ searchParams }: { searchParams: PageProps<"/topics">[
           {topics.map((topic) => (
             <li key={topic.id}>
               <Link href={`/topics/${topic.id}`} className="block py-3">
-                <span className="block font-medium">{topic.name}</span>
+                <span data-private className="block font-medium">
+                  {topic.name}
+                </span>
                 {topic.description && (
-                  <span className="block truncate text-sm text-zinc-600 dark:text-zinc-400">{topic.description}</span>
+                  <span data-private className="block truncate text-sm text-zinc-600 dark:text-zinc-400">
+                    {topic.description}
+                  </span>
                 )}
               </Link>
             </li>
@@ -46,11 +51,13 @@ async function TopicList({ searchParams }: { searchParams: PageProps<"/topics">[
         </ul>
       ) : query ? (
         <div className="flex flex-col items-start gap-2 text-zinc-700 dark:text-zinc-300">
-          <p>No Topics match “{query}”.</p>
+          <p>
+            No Topics match “<span data-private>{query}</span>”.
+          </p>
           <form action={createSearchedTopic}>
             <input type="hidden" name="name" value={query} />
             <button type="submit" className="font-medium text-blue-700 underline dark:text-blue-400">
-              Create “{query}”
+              Create “<span data-private>{query}</span>”
             </button>
           </form>
         </div>

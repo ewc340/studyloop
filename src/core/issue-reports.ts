@@ -1,0 +1,332 @@
+import type { LearnerContext } from "./context";
+import { getLearner, type Learner } from "./learner";
+
+/**
+ * Owner tooling: the owner reports a problem or idea from any page and it lands as a GitHub issue.
+ * This is not part of the learning domain; it exists so the owner can feed the AFK loop quickly.
+ */
+
+export type IssueReportType = "bug" | "idea";
+
+/** How each type of report reads in the issue, and the GitHub label that marks it. */
+const REPORT_TYPES: Record<IssueReportType, { name: string; label: string }> = {
+  bug: { name: "Bug", label: "bug" },
+  idea: { name: "Idea", label: "enhancement" },
+};
+
+/** Where the report was made, as the browser saw it. */
+export interface IssueReportPage {
+  /** Path and query of the page, e.g. `/topics?q=cach`. Query values are redacted before posting. */
+  url: string;
+  /** The route pattern, e.g. `/topics/[id]`. */
+  route: string;
+  viewport: { width: number; height: number };
+  userAgent: string;
+}
+
+export interface IssueReport {
+  type: IssueReportType;
+  description: string;
+  page: IssueReportPage;
+  images: IssueReportImage[];
+}
+
+export interface IssueReportImage {
+  /** `page-capture`: the app's automatic capture, private elements masked. `attachment`: added by the owner, not masked. */
+  kind: "page-capture" | "attachment";
+  name: string;
+  contentType: string;
+  bytes: Uint8Array;
+}
+
+/** The issue as it will be posted. */
+export interface IssueDraft {
+  title: string;
+  body: string;
+  labels: string[];
+}
+
+export interface ReportedIssue {
+  number: number;
+  url: string;
+}
+
+/** Port to the issue tracker (GitHub). Injected so tests never touch the network. */
+export interface IssueTracker {
+  /** Stores an image where issues can embed it, and returns its public URL. */
+  uploadImage(image: { path: string; contentType: string; bytes: Uint8Array }): Promise<{ url: string }>;
+  createIssue(draft: IssueDraft): Promise<ReportedIssue>;
+}
+
+export type IssueTrackerFailure = "unauthorized" | "forbidden" | "rate-limited" | "unavailable";
+
+const FAILURE_MESSAGES: Record<IssueTrackerFailure, string> = {
+  unauthorized: "GitHub rejected the token. It may be wrong or expired.",
+  forbidden: "The token can't do this. It needs Issues and Contents read/write on this repository.",
+  "rate-limited": "GitHub's rate limit was hit. Try again in a few minutes.",
+  unavailable: "Couldn't reach GitHub. Try again.",
+};
+
+/** The issue tracker refused or failed a request. The message is safe to show the owner. */
+export class IssueTrackerError extends Error {
+  constructor(
+    readonly reason: IssueTrackerFailure,
+    options?: { cause?: unknown },
+  ) {
+    super(FAILURE_MESSAGES[reason], options);
+    this.name = "IssueTrackerError";
+  }
+}
+
+/** Issue reporting as configured on the server: who may report, and where reports go. */
+export interface IssueReporting {
+  tracker: IssueTracker;
+  /** The email of the owner's Learner; only they may report issues. */
+  ownerEmail: string;
+  /** The running app's version (git commit). */
+  appVersion: string;
+}
+
+/** Only the owner may report issues. */
+export class NotIssueReporterError extends Error {
+  constructor() {
+    super("Only the owner can report issues");
+    this.name = "NotIssueReporterError";
+  }
+}
+
+/** Whether the acting Learner may report issues: issue reporting is configured and they are the owner. */
+export async function canReportIssues(ctx: LearnerContext, reporting: IssueReporting | null): Promise<boolean> {
+  return (await ownerActing(ctx, reporting)) !== null;
+}
+
+/** The acting Learner if they are the owner, else null. */
+async function ownerActing(ctx: LearnerContext, reporting: IssueReporting | null): Promise<Learner | null> {
+  const ownerEmail = reporting?.ownerEmail.trim().toLowerCase();
+  if (!ownerEmail) return null;
+  const learner = await getLearner(ctx);
+  return learner.email.toLowerCase() === ownerEmail ? learner : null;
+}
+
+async function requireOwner(ctx: LearnerContext, reporting: IssueReporting): Promise<Learner> {
+  const owner = await ownerActing(ctx, reporting);
+  if (!owner) throw new NotIssueReporterError();
+  return owner;
+}
+
+/** A report as the preview sees it: images are described but their bytes aren't needed. */
+export interface IssueReportPreview extends Omit<IssueReport, "images"> {
+  images: Omit<IssueReportImage, "bytes">[];
+}
+
+/** Exactly the issue `reportIssue` would post, except that images aren't uploaded yet. Uploads nothing. */
+export async function previewIssueReport(
+  ctx: LearnerContext,
+  reporting: IssueReporting,
+  report: IssueReportPreview,
+): Promise<IssueDraft> {
+  const facts = await serverFacts(ctx, reporting, report);
+  return draftIssue(report, facts, report.images.map(() => null));
+}
+
+/** Reports an issue as the acting Learner, who must be the owner. */
+export async function reportIssue(
+  ctx: LearnerContext,
+  reporting: IssueReporting,
+  report: IssueReport,
+): Promise<ReportedIssue> {
+  const facts = await serverFacts(ctx, reporting, report);
+  const imageUrls: string[] = [];
+  for (const image of report.images) {
+    const path = `${facts.reportedAt.toISOString().slice(0, 10)}/${crypto.randomUUID()}-${fileName(image)}`;
+    const { url } = await reporting.tracker.uploadImage({ path, contentType: image.contentType, bytes: image.bytes });
+    imageUrls.push(url);
+  }
+  return reporting.tracker.createIssue(draftIssue(report, facts, imageUrls));
+}
+
+const IMAGE_EXTENSIONS: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+  "image/gif": "gif",
+};
+
+/** A URL-safe file name that keeps the readable part of the original. */
+function fileName(image: IssueReportImage): string {
+  const base = image.name
+    .replace(/\.[a-z0-9]+$/i, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+  return `${base || "image"}.${IMAGE_EXTENSIONS[image.contentType] ?? "bin"}`;
+}
+
+/** What the server knows about a report that the browser doesn't. */
+interface ServerFacts {
+  appVersion: string;
+  reportedAt: Date;
+  timezone: string;
+}
+
+/** The report can't be posted as it is. */
+export class InvalidIssueReportError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidIssueReportError";
+  }
+}
+
+export const ISSUE_REPORT_LIMITS = {
+  maxImages: 6,
+  maxImageBytes: 5 * 1024 * 1024,
+  imageTypes: ["image/png", "image/jpeg", "image/webp", "image/gif"],
+} as const;
+
+function validate(report: IssueReportPreview | IssueReport): void {
+  if (!Object.hasOwn(REPORT_TYPES, report.type)) throw new InvalidIssueReportError("Choose bug or idea");
+  if (!report.description.trim()) throw new InvalidIssueReportError("Describe the problem or idea");
+  if (report.images.length > ISSUE_REPORT_LIMITS.maxImages) {
+    throw new InvalidIssueReportError(`At most ${ISSUE_REPORT_LIMITS.maxImages} images per report`);
+  }
+  for (const image of report.images) {
+    if (!(ISSUE_REPORT_LIMITS.imageTypes as readonly string[]).includes(image.contentType)) {
+      throw new InvalidIssueReportError(`${image.name} isn't a PNG, JPEG, WebP or GIF image`);
+    }
+    if ("bytes" in image && image.bytes.byteLength > ISSUE_REPORT_LIMITS.maxImageBytes) {
+      throw new InvalidIssueReportError(`${image.name} is over ${ISSUE_REPORT_LIMITS.maxImageBytes / 1024 / 1024} MB`);
+    }
+  }
+}
+
+/** Checks the report and that the acting Learner is the owner, and gathers what the server adds to the report. */
+async function serverFacts(
+  ctx: LearnerContext,
+  reporting: IssueReporting,
+  report: IssueReportPreview | IssueReport,
+): Promise<ServerFacts> {
+  const owner = await requireOwner(ctx, reporting);
+  validate(report);
+  return { appVersion: reporting.appVersion, reportedAt: ctx.clock.now(), timezone: owner.timezone };
+}
+
+const NOT_UPLOADED_YET = "uploaded when you submit";
+
+/** Viewports up to this width are phones (below Tailwind's `md` breakpoint). */
+const PHONE_MAX_WIDTH = 767;
+
+/**
+ * The issue for a report. `imageUrls` holds each image's URL in `report.images` order, or null
+ * while it isn't uploaded yet (a preview), shown as a placeholder.
+ */
+function draftIssue(report: IssueReportPreview, facts: ServerFacts, imageUrls: (string | null)[]): IssueDraft {
+  const description = report.description.trim();
+  const { page } = report;
+  const { width, height } = page.viewport;
+  const context: [string, string][] = [
+    ["Type", REPORT_TYPES[report.type].name],
+    ["Page", code(redactQueryValues(page.url))],
+    ["Route", code(page.route)],
+    ["Viewport", `${width}×${height} (${width <= PHONE_MAX_WIDTH ? "phone" : "desktop"})`],
+    ["App version", code(facts.appVersion)],
+    ["Browser", code(page.userAgent)],
+    ["Reported", `${formatLocal(facts.reportedAt, facts.timezone)} (${facts.timezone})`],
+  ];
+  let attachmentNumber = 0;
+  const screenshots = report.images.map((image, index) => {
+    const url = imageUrls[index] ?? NOT_UPLOADED_YET;
+    if (image.kind === "page-capture") {
+      return `**Page capture** (private content masked)\n\n![Page capture](${url})`;
+    }
+    attachmentNumber += 1;
+    return `**Attachment ${attachmentNumber}**\n\n![Attachment ${attachmentNumber}](${url})`;
+  });
+  const body = [
+    description,
+    ...(screenshots.length > 0 ? ["## Screenshots", ...screenshots] : []),
+    "## Context",
+    ["| | |", "| --- | --- |", ...context.map(([key, value]) => `| ${key} | ${value} |`)].join("\n"),
+    "_Reported from the studyloop app._",
+  ].join("\n\n");
+  return {
+    title: shorten(description.split("\n")[0].trim(), MAX_TITLE_LENGTH),
+    body,
+    labels: ["needs-triage", REPORT_TYPES[report.type].label],
+  };
+}
+
+const MAX_TITLE_LENGTH = 80;
+
+function shorten(text: string, max: number): string {
+  return text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
+}
+
+/** Inline code for a table cell: no backtick, pipe or line break can escape it. */
+function code(text: string): string {
+  return "`" + text.replace(/[`|\r\n]/g, " ").trim() + "`";
+}
+
+/** Keeps a URL's path and query keys but drops query values and the fragment, which can hold Learner data. */
+function redactQueryValues(url: string): string {
+  const [withoutHash] = url.split("#");
+  const [path, query] = withoutHash.split("?");
+  if (!query) return path;
+  const keys = query
+    .split("&")
+    .filter(Boolean)
+    .map((pair) => `${pair.split("=")[0]}=…`);
+  return `${path}?${keys.join("&")}`;
+}
+
+/** `YYYY-MM-DD HH:mm` in the timezone. */
+function formatLocal(date: Date, timezone: string): string {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(date)
+      .map((part) => [part.type, part.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
+}
+
+export interface InMemoryIssueTracker extends IssueTracker {
+  readonly issues: (IssueDraft & ReportedIssue)[];
+  readonly images: { path: string; contentType: string; bytes: Uint8Array; url: string }[];
+  /** Every call fails with this error from now on; null to recover. */
+  failWith(error: IssueTrackerError | null): void;
+}
+
+/** An IssueTracker that keeps everything in memory: for tests and the e2e server. */
+export function inMemoryIssueTracker(): InMemoryIssueTracker {
+  const issues: (IssueDraft & ReportedIssue)[] = [];
+  const images: InMemoryIssueTracker["images"] = [];
+  let failure: IssueTrackerError | null = null;
+  return {
+    issues,
+    images,
+    failWith(error) {
+      failure = error;
+    },
+    async uploadImage(image) {
+      if (failure) throw failure;
+      const url = `https://issue-tracker.test/images/${image.path}`;
+      images.push({ ...image, url });
+      return { url };
+    },
+    async createIssue(draft) {
+      if (failure) throw failure;
+      const number = issues.length + 1;
+      const issue = { ...draft, number, url: `https://issue-tracker.test/issues/${number}` };
+      issues.push(issue);
+      return { number, url: issue.url };
+    },
+  };
+}

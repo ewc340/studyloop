@@ -9,7 +9,10 @@ export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
+  // CI retries once so a flaky test's trace is recorded, but a test that only passes on retry still
+  // fails the run: flakiness must be fixed, not hidden.
   retries: process.env.CI ? 1 : 0,
+  failOnFlakyTests: !!process.env.CI,
   reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
   use: {
     baseURL: `http://localhost:${PORT}`,
@@ -29,6 +32,10 @@ export default defineConfig({
       E2E_AUTH_BYPASS: "1",
       BETTER_AUTH_URL: `http://localhost:${PORT}`,
       NEXT_DIST_DIR: ".next-e2e",
+      // Issue reporting for the e2e owner, against an in-memory tracker instead of GitHub.
+      ISSUE_REPORTING_GITHUB_TOKEN: "e2e-not-a-token",
+      ISSUE_REPORTING_OWNER_EMAIL: "e2e-owner@e2e.test",
+      ISSUE_REPORTING_FAKE_TRACKER: "1",
     },
   },
 });

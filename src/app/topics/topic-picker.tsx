@@ -96,7 +96,7 @@ export function TopicPicker({ topics, value, onChange, label = "Topics", name }:
               key={topic.id}
               className="flex items-center gap-1 rounded-full bg-zinc-100 py-1 pr-1 pl-3 text-sm dark:bg-zinc-800"
             >
-              {topic.name}
+              <span data-private>{topic.name}</span>
               <button
                 type="button"
                 aria-label={`Remove ${topic.name}`}
@@ -120,6 +120,7 @@ export function TopicPicker({ topics, value, onChange, label = "Topics", name }:
           aria-activedescendant={expanded ? `${id}-option-${active}` : undefined}
           autoComplete="off"
           value={query}
+          data-private
           placeholder="Find or create a Topic"
           disabled={creating}
           onChange={(event) => {
@@ -152,7 +153,13 @@ export function TopicPicker({ topics, value, onChange, label = "Topics", name }:
                 onMouseEnter={() => setActiveIndex(index)}
                 className={`cursor-pointer px-3 py-2.5 ${index === active ? "bg-zinc-100 dark:bg-zinc-800" : ""}`}
               >
-                {option.type === "topic" ? option.topic.name : <>Create “{option.name}”</>}
+                {option.type === "topic" ? (
+                  <span data-private>{option.topic.name}</span>
+                ) : (
+                  <>
+                    Create “<span data-private>{option.name}</span>”
+                  </>
+                )}
               </li>
             ))}
           </ul>

@@ -32,6 +32,30 @@ export {
   type TopicTimelineEntry,
 } from "./topics";
 
+// Owner tooling: issue reporting (not part of the learning domain)
+export {
+  canReportIssues,
+  inMemoryIssueTracker,
+  InvalidIssueReportError,
+  IssueTrackerError,
+  ISSUE_REPORT_LIMITS,
+  NotIssueReporterError,
+  previewIssueReport,
+  reportIssue,
+  type InMemoryIssueTracker,
+  type IssueDraft,
+  type IssueReport,
+  type IssueReportImage,
+  type IssueReporting,
+  type IssueReportPreview,
+  type IssueReportPage,
+  type IssueReportType,
+  type IssueTracker,
+  type IssueTrackerFailure,
+  type ReportedIssue,
+} from "./issue-reports";
+export { githubIssueTracker, type GitHubIssueTrackerOptions } from "./github-issue-tracker";
+
 // Infrastructure for adapters, scripts and the test harness
 export { connect, databaseUrl, type Db, type DbHandle } from "./db/client";
 export { runMigrations } from "./db/migrate";

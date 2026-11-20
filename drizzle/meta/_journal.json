@@ -15,6 +15,13 @@
       "when": 1795158251215,
       "tag": "0001_auth_and_learner",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1795160746682,
+      "tag": "0002_topics",
+      "breakpoints": true
     }
   ]
 }

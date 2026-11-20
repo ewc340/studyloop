@@ -92,10 +92,6 @@ test("other Learners don't see the Report issue control", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Report issue" })).toHaveCount(0);
 });
 
-/**
- * Compares the page capture with the live page: every private element's area in the capture must be
- * solid mask colour, and some public text must still show (so the check can fail).
- */
 const CAPTURE_ALT = "Capture of this page, private content masked";
 
 /**
@@ -103,34 +99,42 @@ const CAPTURE_ALT = "Capture of this page, private content masked";
  *
  * In dev mode Next can reload a page while compiling code for the first time. A capture taken across
  * that reload shows the loading state instead of the page, and measuring it against the re-rendered
- * page is meaningless (this made the masking test flaky in CI). So an attempt only counts if the page
- * didn't navigate while the sheet was opened and measured; otherwise reload and try again.
+ * page is meaningless (this made the masking test flaky in CI). So an attempt only counts if no full
+ * page load happened while the sheet was opened and measured; otherwise reload and try again.
+ * Same-document URL changes (pushState, hash) don't count. The masking assertions themselves run in
+ * the caller, on the accepted measurement, so a genuinely unmasked capture always fails the test.
  */
 async function captureOnSettledPage(page: Page, ready: Locator, publicHeadingText: string) {
+  let lastError: unknown;
   for (let attempt = 1; attempt <= 3; attempt++) {
-    let navigated = false;
-    const onNavigation = (frame: unknown) => {
-      if (frame === page.mainFrame()) navigated = true;
+    let reloaded = false;
+    const onLoad = () => {
+      reloaded = true;
     };
     await expect(ready).toBeVisible();
-    page.on("framenavigated", onNavigation);
+    page.on("load", onLoad);
     try {
       await page.getByRole("button", { name: "Report issue" }).click();
-      await expect(page.getByRole("img", { name: CAPTURE_ALT })).toBeVisible();
+      const sheet = page.getByRole("dialog");
+      await expect(sheet.getByRole("img", { name: CAPTURE_ALT })).toBeVisible();
       const masking = await maskingOf(page, publicHeadingText);
-      if (!navigated) return { sheet: page.getByRole("dialog"), masking };
+      if (!reloaded) return { sheet, masking };
     } catch (error) {
-      if (!navigated) throw error;
+      if (!reloaded) throw error;
+      lastError = error;
     } finally {
-      page.off("framenavigated", onNavigation);
+      page.off("load", onLoad);
     }
     test.info().annotations.push({ type: "settled-capture-retry", description: `page reloaded during attempt ${attempt}` });
-    console.log(`[settled-capture] page reloaded during attempt ${attempt}; retrying`);
     await page.reload();
   }
-  throw new Error("The page kept reloading; no settled capture after 3 attempts");
+  throw new Error("The page reloaded during every capture attempt", { cause: lastError });
 }
 
+/**
+ * Compares the page capture with the live page: every private element's area in the capture must be
+ * solid mask colour, and some public text must still show (so the check can fail).
+ */
 async function maskingOf(page: Page, publicHeadingText: string) {
   return page.evaluate(async (headingText) => {
     const MASK = [0xa1, 0xa1, 0xaa];

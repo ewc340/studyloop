@@ -44,6 +44,11 @@ export function IssueReportSheet({ repository }: { repository: string }) {
   // Object URLs live until their image is replaced or removed.
   useEffect(() => () => void (capture && URL.revokeObjectURL(capture.src)), [capture]);
 
+  // Each step starts at its top, where the public-repository notice is.
+  useEffect(() => {
+    dialog.current?.scrollTo({ top: 0 });
+  }, [step.name]);
+
   async function open() {
     setCapturing(true);
     setPage(currentPage(params ?? {}));
@@ -142,6 +147,8 @@ export function IssueReportSheet({ repository }: { repository: string }) {
 
   return (
     <div {...{ [REPORT_UI_ATTRIBUTE]: "" }}>
+      {/* Room at the end of the page so the floating button never covers its last item. */}
+      <div aria-hidden="true" className="h-20" />
       <button
         type="button"
         aria-label="Report issue"
@@ -242,7 +249,10 @@ export function IssueReportSheet({ repository }: { repository: string }) {
                           onChange={(event) => setIncludeCapture(event.target.checked)}
                           className="size-5"
                         />
-                        Include the page capture <span className="text-zinc-600 dark:text-zinc-400">(private content masked)</span>
+                        <span>
+                          Include the page capture{" "}
+                          <span className="text-zinc-600 dark:text-zinc-400">(private content masked)</span>
+                        </span>
                       </label>
                     </>
                   ) : (

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createTopic,
   DuplicateTopicNameError,
+  findOrCreateTopic,
   findTopics,
   getTopicPage,
   InvalidTopicError,
@@ -71,6 +72,28 @@ describe("Topics", () => {
       const grace = await actingAsNewLearner(core.ctx);
       await createTopic(ada, { name: "Caching" });
       await expect(createTopic(grace, { name: "caching" })).resolves.toMatchObject({ name: "caching" });
+    });
+  });
+
+  describe("creating a Topic inline while tagging", () => {
+    it("creates the Topic when the Learner has none by that name", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      const topic = await findOrCreateTopic(ada, " Prompt caching ");
+      expect(topic.name).toBe("Prompt caching");
+      expect((await findTopics(ada)).map((t) => t.id)).toEqual([topic.id]);
+    });
+
+    it("returns the Learner's existing Topic with that name, in any case, instead of failing", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      const caching = await createTopic(ada, { name: "Caching", description: "HTTP caches" });
+
+      expect(await findOrCreateTopic(ada, "CACHING")).toEqual(caching);
+      expect(await findTopics(ada)).toHaveLength(1);
+    });
+
+    it("still rejects a blank name", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      await expect(findOrCreateTopic(ada, "  ")).rejects.toBeInstanceOf(InvalidTopicError);
     });
   });
 

@@ -59,7 +59,7 @@ export class DuplicateTopicNameError extends Error {
 const topicColumns = { id: topic.id, name: topic.name, description: topic.description };
 
 function toTopic(row: { id: string; name: string; description: string | null }): Topic {
-  return { ...row, id: row.id as TopicId };
+  return { ...row, id: topicId(row.id) };
 }
 
 /** Creates a Topic for the acting Learner. Throws DuplicateTopicNameError if the name is taken, ignoring case. */
@@ -67,18 +67,41 @@ export async function createTopic(ctx: LearnerContext, input: NewTopic): Promise
   const name = input.name.trim();
   if (!name) throw new InvalidTopicError("A Topic needs a name");
   const description = input.description?.trim() || null;
-  const [row] = await ctx.db
-    .insert(topic)
-    .values({ userId: ctx.learnerId, name, description })
-    .onConflictDoNothing()
-    .returning(topicColumns);
-  if (row) return toTopic(row);
+  // The name index is the only unique constraint a new row can hit (ids are random UUIDs).
+  // Retry once in case the clashing Topic disappears between the insert and the lookup.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const [row] = await ctx.db
+      .insert(topic)
+      .values({ userId: ctx.learnerId, name, description })
+      .onConflictDoNothing()
+      .returning(topicColumns);
+    if (row) return toTopic(row);
 
-  const [existing] = await ctx.db
+    const existing = await topicNamed(ctx, name);
+    if (existing) throw new DuplicateTopicNameError(existing);
+  }
+  throw new Error(`Could not create Topic "${name}"`);
+}
+
+/**
+ * The Learner's Topic with this name (ignoring case), created if they have none. For pickers that
+ * create Topics inline while tagging, so tagging never blocks logging.
+ */
+export async function findOrCreateTopic(ctx: LearnerContext, name: string): Promise<Topic> {
+  try {
+    return await createTopic(ctx, { name });
+  } catch (error) {
+    if (error instanceof DuplicateTopicNameError) return error.existing;
+    throw error;
+  }
+}
+
+async function topicNamed(ctx: LearnerContext, name: string): Promise<Topic | undefined> {
+  const [row] = await ctx.db
     .select(topicColumns)
     .from(topic)
     .where(and(eq(topic.userId, ctx.learnerId), eq(sql`lower(${topic.name})`, sql`lower(${name})`)));
-  throw new DuplicateTopicNameError(toTopic(existing));
+  return row && toTopic(row);
 }
 
 export interface TopicSearch {

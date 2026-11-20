@@ -6,7 +6,7 @@ import { createSearchedTopic } from "./actions";
 
 async function TopicList({ searchParams }: { searchParams: PageProps<"/topics">["searchParams"] }) {
   const { q } = await searchParams;
-  const query = typeof q === "string" ? q : "";
+  const query = typeof q === "string" ? q.trim() : "";
   const topics = await findTopics(await requireLearnerContext(), { query });
 
   return (
@@ -44,13 +44,13 @@ async function TopicList({ searchParams }: { searchParams: PageProps<"/topics">[
             </li>
           ))}
         </ul>
-      ) : query.trim() ? (
+      ) : query ? (
         <div className="flex flex-col items-start gap-2 text-zinc-700 dark:text-zinc-300">
-          <p>No Topics match “{query.trim()}”.</p>
+          <p>No Topics match “{query}”.</p>
           <form action={createSearchedTopic}>
-            <input type="hidden" name="name" value={query.trim()} />
+            <input type="hidden" name="name" value={query} />
             <button type="submit" className="font-medium text-blue-700 underline dark:text-blue-400">
-              Create “{query.trim()}”
+              Create “{query}”
             </button>
           </form>
         </div>

@@ -18,6 +18,7 @@ export {
 export {
   createTopic,
   DuplicateTopicNameError,
+  findOrCreateTopic,
   findTopics,
   getTopicPage,
   InvalidTopicError,

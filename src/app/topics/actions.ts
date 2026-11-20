@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { createTopic, DuplicateTopicNameError, InvalidTopicError, type Topic } from "@/core";
+import { createTopic, DuplicateTopicNameError, findOrCreateTopic, InvalidTopicError, type Topic } from "@/core";
 import { requireLearnerContext } from "@/server/learner";
 
 export interface NewTopicFormState {
@@ -35,15 +35,11 @@ export async function createSearchedTopic(formData: FormData): Promise<void> {
 
 export type InlineTopicResult = { topic: Topic } | { error: string };
 
-/**
- * Creates a Topic from a Topic picker. If the Learner already has a Topic with that name, returns it,
- * so tagging never blocks logging.
- */
+/** Creates a Topic from a Topic picker, or returns the Learner's Topic that already has that name. */
 export async function createTopicInline(name: string): Promise<InlineTopicResult> {
   try {
-    return { topic: await createTopic(await requireLearnerContext(), { name }) };
+    return { topic: await findOrCreateTopic(await requireLearnerContext(), name) };
   } catch (error) {
-    if (error instanceof DuplicateTopicNameError) return { topic: error.existing };
     if (error instanceof InvalidTopicError) return { error: error.message };
     throw error;
   }

@@ -5,7 +5,7 @@ An agent picks the next unblocked `ready-for-agent` ticket (a sub-issue of spec 
 | File | What it does |
 |---|---|
 | `prompt.md` | The instructions every run follows (pick → claim → draft PR → TDD → screenshots → code review → PR → CI green). |
-| `next-ticket.sh` | Deterministically picks the work: `RESUME <n>` (ours, assigned, PR still draft), `START <n>` (lowest unblocked, unassigned), or `NONE`. Never the spec or `ready-for-human`. |
+| `next-ticket.sh` | Deterministically picks the work: `RESUME <n>` (ours, assigned, PR still draft), `START <n>` (unblocked, unassigned; `priority`-labelled first, then lowest number), or `NONE`. Never the spec or `ready-for-human`. |
 | `screenshots.ts` | Agent QA: phone-sized screenshots of changed pages into `docs/screenshots/<n>/`, embedded in the PR. |
 | `setup.sh` | Prepares a machine: Node 24, `npm ci`, a placeholder `.env` if none exists, Docker + Postgres, Playwright. |
 | `once.sh` | One ticket, **interactive** — watch it and step in. |

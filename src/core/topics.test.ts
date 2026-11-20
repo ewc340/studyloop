@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createTopic, DuplicateTopicNameError, getTopicPage, InvalidTopicError } from "@/core";
+import { createTopic, DuplicateTopicNameError, findTopics, getTopicPage, InvalidTopicError } from "@/core";
 import { useTestContext } from "@/test/core-harness";
 import { actingAsNewLearner } from "@/test/learners";
 
@@ -40,6 +40,46 @@ describe("Topics", () => {
       const grace = await actingAsNewLearner(core.ctx);
       await createTopic(ada, { name: "Caching" });
       await expect(createTopic(grace, { name: "caching" })).resolves.toMatchObject({ name: "caching" });
+    });
+  });
+
+  describe("finding Topics by name", () => {
+    async function names(...args: Parameters<typeof findTopics>) {
+      return (await findTopics(...args)).map((t) => t.name);
+    }
+
+    it("lists all the Learner's Topics alphabetically, ignoring case", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      for (const name of ["caching", "Tool calling", "Agent harness"]) await createTopic(ada, { name });
+
+      expect(await names(ada)).toEqual(["Agent harness", "caching", "Tool calling"]);
+      expect(await names(ada, { query: "  " })).toEqual(["Agent harness", "caching", "Tool calling"]);
+    });
+
+    it("matches any part of the name, ignoring case", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      for (const name of ["Tool calling", "HTTP caching", "Agent harness"]) await createTopic(ada, { name });
+
+      expect(await names(ada, { query: "CALL" })).toEqual(["Tool calling"]);
+      expect(await names(ada, { query: "a" })).toEqual(["Agent harness", "HTTP caching", "Tool calling"]);
+      expect(await names(ada, { query: "kubernetes" })).toEqual([]);
+    });
+
+    it("treats % and _ in the query as ordinary characters", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      for (const name of ["p99_latency", "p99 latency", "100% uptime"]) await createTopic(ada, { name });
+
+      expect(await names(ada, { query: "_" })).toEqual(["p99_latency"]);
+      expect(await names(ada, { query: "%" })).toEqual(["100% uptime"]);
+    });
+
+    it("never finds another Learner's Topics", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      const grace = await actingAsNewLearner(core.ctx);
+      await createTopic(ada, { name: "Caching" });
+
+      expect(await names(grace)).toEqual([]);
+      expect(await names(grace, { query: "cach" })).toEqual([]);
     });
   });
 });

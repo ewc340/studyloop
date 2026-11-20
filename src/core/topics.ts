@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, asc, eq, ilike, sql } from "drizzle-orm";
 import type { LearnerContext } from "./context";
 import { topic } from "./db/schema";
 
@@ -56,8 +56,34 @@ export async function createTopic(ctx: LearnerContext, input: NewTopic): Promise
   const [existing] = await ctx.db
     .select(topicColumns)
     .from(topic)
-    .where(and(eq(topic.userId, ctx.learnerId), eq(sql`lower(${topic.name})`, name.toLowerCase())));
+    .where(and(eq(topic.userId, ctx.learnerId), eq(sql`lower(${topic.name})`, sql`lower(${name})`)));
   throw new DuplicateTopicNameError(toTopic(existing));
+}
+
+export interface TopicSearch {
+  /** Matches any part of a Topic's name, ignoring case. Blank matches every Topic. */
+  query?: string;
+}
+
+/** The acting Learner's Topics whose names match the query, alphabetically (ignoring case). */
+export async function findTopics(ctx: LearnerContext, search: TopicSearch = {}): Promise<Topic[]> {
+  const query = search.query?.trim();
+  const rows = await ctx.db
+    .select(topicColumns)
+    .from(topic)
+    .where(
+      and(
+        eq(topic.userId, ctx.learnerId),
+        query ? ilike(topic.name, `%${escapeLikePattern(query)}%`) : undefined,
+      ),
+    )
+    .orderBy(asc(sql`lower(${topic.name})`), asc(topic.name));
+  return rows.map(toTopic);
+}
+
+/** Makes LIKE's wildcards, and its default escape character, match themselves. */
+function escapeLikePattern(text: string): string {
+  return text.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
 /** The acting Learner's Topic page. */

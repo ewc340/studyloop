@@ -18,9 +18,15 @@ export {
 export {
   createTopic,
   DuplicateTopicNameError,
+  findTopics,
   getTopicPage,
   InvalidTopicError,
-  type NewTopic, type Topic, type TopicId, type TopicPage } from "./topics";
+  type NewTopic,
+  type Topic,
+  type TopicId,
+  type TopicPage,
+  type TopicSearch,
+} from "./topics";
 
 // Infrastructure for adapters, scripts and the test harness
 export { connect, databaseUrl, type Db, type DbHandle } from "./db/client";

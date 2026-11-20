@@ -24,13 +24,33 @@ export {
   InvalidTopicError,
   topicId,
   TopicNotFoundError,
+  type ConfidenceRating,
+  type DailyEntryTimelineEntry,
   type NewTopic,
   type Topic,
+  type TopicConfidence,
   type TopicId,
   type TopicPage,
   type TopicSearch,
   type TopicTimelineEntry,
 } from "./topics";
+export {
+  FutureDailyEntryError,
+  getDailyEntry,
+  getToday,
+  InvalidConfidenceError,
+  InvalidDailyEntryError,
+  isCalendarDate,
+  isConfidence,
+  isFutureDate,
+  listDailyEntries,
+  saveDailyEntry,
+  type CalendarDate,
+  type Confidence,
+  type DailyEntry,
+  type DailyEntryInput,
+  type DailyEntryTopic,
+} from "./daily-entries";
 
 // Owner tooling: issue reporting (not part of the learning domain)
 export {

@@ -21,7 +21,10 @@ async function SignedInHome() {
       <p className="text-zinc-700 dark:text-zinc-300">
         Track what you learn, connect topics, and close the gaps your interviews expose.
       </p>
-      <nav>
+      <nav className="flex gap-4">
+        <Link href="/entries" className="font-medium text-blue-700 underline dark:text-blue-400">
+          Daily Entries
+        </Link>
         <Link href="/topics" className="font-medium text-blue-700 underline dark:text-blue-400">
           Topics
         </Link>

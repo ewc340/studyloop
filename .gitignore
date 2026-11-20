@@ -28,3 +28,6 @@ backups/
 .DS_Store
 *.pem
 npm-debug.log*
+
+# AFK loop transcripts
+/ralph/logs/

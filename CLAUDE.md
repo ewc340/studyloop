@@ -10,6 +10,8 @@
 - Before pushing, `npm run check` must pass (lint, typecheck, core tests, e2e).
 - After adding, removing or upgrading dependencies, run `npm run deps:relock` and commit `package-lock.json`. Incremental `npm install` on macOS drops Linux-only optional packages and breaks `npm ci` in CI.
 - After changing `src/core/db/schema.ts`, run `npm run db:generate` and commit the migration.
+- `.claude/hooks/block-dangerous-git.sh` blocks pushing to `main`, force-pushes, merges and deletions. Push your branch explicitly (`git push -u origin <branch>`); merging is the owner's job.
+- The AFK loop (unattended ticket runs) is described in `ralph/README.md`; its instructions are `ralph/prompt.md`.
 
 ## Agent skills
 

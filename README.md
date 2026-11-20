@@ -25,6 +25,10 @@ npm run e2e            # Playwright, phone viewport, against a dedicated e2e dat
 npm run check          # lint + typecheck + tests + e2e + build (what CI runs)
 ```
 
+## AFK loop
+
+Tickets labelled `ready-for-agent` can be implemented unattended: `./ralph/once.sh` (watch one), `./ralph/afk.sh 3` (headless), or a nightly cloud routine. See [ralph/README.md](./ralph/README.md).
+
 ## Architecture
 
 - **`src/core`** — all domain logic, framework-free. Every operation takes a `CoreContext` (database, Clock, and later the acting Learner and other ports). Its public interface is `src/core/index.ts`; ESLint blocks imports of core internals from outside, and Next.js/React imports inside core.

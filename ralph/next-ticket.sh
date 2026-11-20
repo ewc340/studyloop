@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Prints the AFK loop's next move as one line:
 #   RESUME <n>   our unfinished ticket: assigned to us, still open, and no PR of ours is out of draft
+#                (same ordering as START if there are several)
 #   START <n>    the next open, unassigned, unblocked ready-for-agent ticket: those labelled
 #                `priority` first, then lowest number
 #   NONE         nothing to do

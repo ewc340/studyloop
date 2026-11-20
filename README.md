@@ -14,7 +14,7 @@ Spec: [#1](https://github.com/ewc340/studyloop/issues/1) · Vocabulary: [GLOSSAR
 ```sh
 npm install
 cp .env.example .env   # optional; defaults match docker-compose.yml
-npm run dev            # starts Postgres, applies migrations, starts Next.js on :3000
+npm run dev            # starts Postgres and Next.js on :3000; the server applies pending migrations on start
 ```
 
 ## Test it

@@ -29,7 +29,7 @@ An agent picks the next unblocked `ready-for-agent` ticket (a sub-issue of spec 
 ./ralph/afk.sh 3       # then: up to three tickets back to back
 ```
 
-Both switch this checkout to the latest `origin/main` first (detached HEAD), and leave it on the ticket branch afterwards. Run `git switch main` when you want your own branch back. Keep the dev server (`npm run dev`) in a separate terminal; it follows whatever is checked out.
+Both switch this checkout to the latest `origin/main` first (detached HEAD). A run that builds a ticket leaves it on that ticket's branch; a `NO_WORK` or `BLOCKED` run leaves it detached on main. Run `git switch main` when you want your own branch back. Keep the dev server (`npm run dev`) in a separate terminal; it follows whatever is checked out.
 
 Watch progress in the terminal, or on GitHub (the claimed issue, the draft PR, the Actions tab). Stop any time with `Ctrl+C`. A ticket counts as handed over once its PR is out of draft; the next run moves on.
 

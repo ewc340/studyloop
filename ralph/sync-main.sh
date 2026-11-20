@@ -12,5 +12,8 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
 fi
 
 git fetch --quiet origin
-git switch --quiet --detach origin/main
+if ! git switch --quiet --detach origin/main; then
+  echo "[sync] Couldn't switch to origin/main: an untracked local file would be overwritten (listed above). Move or delete it, then rerun." >&2
+  exit 1
+fi
 echo "[sync] On origin/main @ $(git rev-parse --short HEAD)"

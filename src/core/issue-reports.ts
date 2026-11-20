@@ -99,7 +99,7 @@ export async function previewIssueReport(
   reporting: IssueReporting,
   report: IssueReportPreview,
 ): Promise<IssueDraft> {
-  const facts = await serverFacts(ctx, reporting);
+  const facts = await serverFacts(ctx, reporting, report);
   return draftIssue(report, facts, report.images.map(() => null));
 }
 
@@ -109,7 +109,7 @@ export async function reportIssue(
   reporting: IssueReporting,
   report: IssueReport,
 ): Promise<ReportedIssue> {
-  const facts = await serverFacts(ctx, reporting);
+  const facts = await serverFacts(ctx, reporting, report);
   const imageUrls: string[] = [];
   for (const image of report.images) {
     const path = `${facts.reportedAt.toISOString().slice(0, 10)}/${crypto.randomUUID()}-${fileName(image)}`;
@@ -144,9 +144,44 @@ interface ServerFacts {
   timezone: string;
 }
 
-/** Checks the acting Learner is the owner and gathers what the server adds to their report. */
-async function serverFacts(ctx: LearnerContext, reporting: IssueReporting): Promise<ServerFacts> {
+/** The report can't be posted as it is. */
+export class InvalidIssueReportError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidIssueReportError";
+  }
+}
+
+export const ISSUE_REPORT_LIMITS = {
+  maxImages: 6,
+  maxImageBytes: 5 * 1024 * 1024,
+  imageTypes: ["image/png", "image/jpeg", "image/webp", "image/gif"],
+} as const;
+
+function validate(report: IssueReportPreview | IssueReport): void {
+  if (report.type !== "bug" && report.type !== "idea") throw new InvalidIssueReportError("Choose bug or idea");
+  if (!report.description.trim()) throw new InvalidIssueReportError("Describe the problem or idea");
+  if (report.images.length > ISSUE_REPORT_LIMITS.maxImages) {
+    throw new InvalidIssueReportError(`At most ${ISSUE_REPORT_LIMITS.maxImages} images per report`);
+  }
+  for (const image of report.images) {
+    if (!(ISSUE_REPORT_LIMITS.imageTypes as readonly string[]).includes(image.contentType)) {
+      throw new InvalidIssueReportError(`${image.name} isn't a PNG, JPEG, WebP or GIF image`);
+    }
+    if ("bytes" in image && image.bytes.byteLength > ISSUE_REPORT_LIMITS.maxImageBytes) {
+      throw new InvalidIssueReportError(`${image.name} is over 5 MB`);
+    }
+  }
+}
+
+/** Checks the report and that the acting Learner is the owner, and gathers what the server adds to the report. */
+async function serverFacts(
+  ctx: LearnerContext,
+  reporting: IssueReporting,
+  report: IssueReportPreview | IssueReport,
+): Promise<ServerFacts> {
   const owner = await requireOwner(ctx, reporting);
+  validate(report);
   return { appVersion: reporting.appVersion, reportedAt: ctx.clock.now(), timezone: owner.timezone };
 }
 
@@ -189,10 +224,16 @@ function draftIssue(report: IssueReportPreview, facts: ServerFacts, imageUrls: (
     "_Reported from the studyloop app._",
   ].join("\n\n");
   return {
-    title: description.split("\n")[0].trim(),
+    title: shorten(description.split("\n")[0].trim(), MAX_TITLE_LENGTH),
     body,
     labels: ["needs-triage", report.type === "bug" ? "bug" : "enhancement"],
   };
+}
+
+const MAX_TITLE_LENGTH = 80;
+
+function shorten(text: string, max: number): string {
+  return text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
 }
 
 /** Inline code for a table cell: no backtick, pipe or line break can escape it. */

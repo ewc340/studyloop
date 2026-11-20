@@ -41,6 +41,8 @@ export { authTables } from "./db/auth-tables";
 export {
   canReportIssues,
   inMemoryIssueTracker,
+  InvalidIssueReportError,
+  ISSUE_REPORT_LIMITS,
   NotIssueReporterError,
   previewIssueReport,
   reportIssue,

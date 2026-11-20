@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   canReportIssues,
   inMemoryIssueTracker,
+  InvalidIssueReportError,
   NotIssueReporterError,
   previewIssueReport,
   reportIssue,
@@ -154,6 +155,38 @@ describe("reporting an issue", () => {
     expect(preview.body).toContain("![Attachment 1](uploaded when you submit)");
     expect(tracker.images).toHaveLength(0);
     expect(tracker.issues).toHaveLength(0);
+  });
+
+  it("a long first line is shortened for the title, keeping the full description in the body", async () => {
+    const tracker = inMemoryIssueTracker();
+    const description = `${"word ".repeat(30).trim()}\nmore detail`;
+    await reportIssue(await actingAsOwner(), reportingWith(tracker), bugReport({ description }));
+    expect(tracker.issues[0].title).toBe(`${"word ".repeat(16).trim()}…`);
+    expect(tracker.issues[0].title).toHaveLength(80);
+    expect(tracker.issues[0].body).toContain(description);
+  });
+
+  describe("rejects a report that can't be posted, posting nothing", () => {
+    const image = { kind: "attachment" as const, name: "a.png", contentType: "image/png", bytes: png("a") };
+    const cases: [string, Partial<IssueReport>][] = [
+      ["a blank description", { description: "  \n " }],
+      ["an unknown type", { type: "question" as IssueReport["type"] }],
+      ["a file that isn't an image", { images: [{ ...image, contentType: "text/html" }] }],
+      ["an image over 5 MB", { images: [{ ...image, bytes: new Uint8Array(5 * 1024 * 1024 + 1) }] }],
+      ["more than 6 images", { images: Array.from({ length: 7 }, () => image) }],
+    ];
+    it.each(cases)("%s", async (_, overrides) => {
+      const tracker = inMemoryIssueTracker();
+      const owner = await actingAsOwner();
+      await expect(reportIssue(owner, reportingWith(tracker), bugReport(overrides))).rejects.toThrow(
+        InvalidIssueReportError,
+      );
+      await expect(previewIssueReport(owner, reportingWith(tracker), bugReport(overrides))).rejects.toThrow(
+        InvalidIssueReportError,
+      );
+      expect(tracker.images).toHaveLength(0);
+      expect(tracker.issues).toHaveLength(0);
+    });
   });
 
   it("only the owner may report issues", async () => {

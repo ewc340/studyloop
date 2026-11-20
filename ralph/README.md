@@ -4,8 +4,9 @@ An agent picks the next unblocked `ready-for-agent` ticket (a sub-issue of spec 
 
 | File | What it does |
 |---|---|
-| `prompt.md` | The instructions every run follows (pick → claim → draft PR → TDD → code review → PR → CI green). |
-| `next-ticket.sh` | Deterministically picks the work: `RESUME <n>` (our unfinished ticket), `START <n>` (lowest unblocked, unassigned), or `NONE`. |
+| `prompt.md` | The instructions every run follows (pick → claim → draft PR → TDD → screenshots → code review → PR → CI green). |
+| `next-ticket.sh` | Deterministically picks the work: `RESUME <n>` (ours, assigned, PR still draft), `START <n>` (lowest unblocked, unassigned), or `NONE`. Never the spec or `ready-for-human`. |
+| `screenshots.ts` | Agent QA: phone-sized screenshots of changed pages into `docs/screenshots/<n>/`, embedded in the PR. |
 | `setup.sh` | Prepares a machine: Node 24, `npm ci`, a placeholder `.env` if none exists, Docker + Postgres, Playwright. |
 | `once.sh` | One ticket, **interactive** — watch it and step in. |
 | `afk.sh [n]` | Up to `n` tickets (default 3), **headless**, live progress in the terminal, transcripts in `ralph/logs/`. Stops on `NO_WORK`, `BLOCKED`, or an unfinished run. |
@@ -14,7 +15,9 @@ An agent picks the next unblocked `ready-for-agent` ticket (a sub-issue of spec 
 ## Safety rails
 
 - Runs use `--permission-mode auto`: every action is checked by the auto-mode classifier; there is no blanket allowlist.
-- `.claude/hooks/block-dangerous-git.sh` blocks pushing to `main`, force-pushes, merging PRs, deleting branches/repos, `reset --hard`, `clean -f`.
+- `.claude/hooks/block_dangerous_git.py` parses every Bash command (quotes, `&&`, `bash -c`, `git -C`) and blocks pushes to `main` or `HEAD`, force-pushes and `+`/`:` refspecs, merging PRs, deleting branches/repos/issues, `reset --hard`, `clean -f`; it fails closed. Its cases are tested in CI (`npm run test:hooks`).
+- Recommended on GitHub as a server-side backstop: a ruleset on `main` that blocks direct pushes, force-pushes and deletion.
+- Don't assign yourself `ready-for-agent` tickets: assigned tickets are what the loop resumes. Relabel to `ready-for-human` instead.
 - Ticket branches are `claude/<n>-<slug>`; work is pushed after every green step and a draft PR is opened at the start, so a run cut off by usage limits loses little and the next run resumes it.
 - A ticket the agent can't finish gets a comment and `needs-info` instead of a guess.
 
@@ -25,7 +28,7 @@ An agent picks the next unblocked `ready-for-agent` ticket (a sub-issue of spec 
 ./ralph/afk.sh 3       # then: up to three tickets back to back
 ```
 
-Watch progress in the terminal, or on GitHub (the claimed issue, the draft PR, the Actions tab). Stop any time with `Ctrl+C`.
+Watch progress in the terminal, or on GitHub (the claimed issue, the draft PR, the Actions tab). Stop any time with `Ctrl+C`. A ticket counts as handed over once its PR is out of draft; the next run moves on.
 
 ## Run it overnight in the cloud (Claude Code routine)
 

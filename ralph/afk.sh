@@ -7,6 +7,7 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 
 MAX="${1:-3}"
+if ! [[ "$MAX" =~ ^[1-9][0-9]*$ ]]; then echo "Usage: ./ralph/afk.sh [max-tickets]" >&2; exit 2; fi
 mkdir -p ralph/logs
 
 for i in $(seq 1 "$MAX"); do
@@ -18,11 +19,16 @@ for i in $(seq 1 "$MAX"); do
     --permission-mode auto \
     --output-format stream-json --verbose \
     | tee "$log" \
-    | jq -rj --unbuffered -f ralph/format-stream.jq
+    | jq -j --unbuffered -f ralph/format-stream.jq
 
   status="${PIPESTATUS[0]}"
-  final="$(jq -r 'select(.type == "result") | .result // ""' "$log" | tail -n 1 | awk 'NF { line = $0 } END { print line }')"
+  final="$(jq -r 'select(.type == "result") | .result // ""' "$log" | awk 'NF { line = $0 } END { print line }')"
   printf '\n━━━ iteration %s ended (exit %s): %s ━━━\n' "$i" "$status" "${final:-<no final line>}"
+
+  if [ "$status" != "0" ]; then
+    echo "Stopped: claude exited with status $status. Check $log."
+    exit 1
+  fi
 
   case "$final" in
     DONE*) continue ;;

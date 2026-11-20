@@ -13,6 +13,10 @@ if [ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]; then
   nvm install >/dev/null 2>&1 || true
   nvm use >/dev/null
 fi
+if ! command -v node >/dev/null 2>&1; then
+  echo "[setup] Node is not installed. Install Node 24 (e.g. via nvm) and retry." >&2
+  exit 1
+fi
 major="$(node -p 'process.versions.node.split(".")[0]')"
 if [ "$major" -lt 24 ]; then
   echo "[setup] Node $major found; Node 24+ is required (see .nvmrc)." >&2

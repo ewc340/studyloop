@@ -1,4 +1,9 @@
 # Local development database. Production compose lives in its own file (see ticket #18).
+# One shared Postgres server for every checkout of this repo (main folder, worktrees, AFK runs):
+# without a fixed project name, Compose names it after the folder and a second checkout tries to
+# start a second server on the same port. Checkouts are isolated by database name instead.
+name: studyloop
+
 services:
   db:
     image: pgvector/pgvector:pg17

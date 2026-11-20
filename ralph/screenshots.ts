@@ -10,6 +10,13 @@ import { chromium, devices } from "@playwright/test";
 import { localDatabaseUrls } from "../src/core";
 import { E2E_LEARNER_HEADER } from "../src/server/test-auth-bypass";
 
+// Per-checkout settings such as E2E_DATABASE_URL live in .env; existing environment variables win.
+try {
+  process.loadEnvFile(".env");
+} catch {
+  // No .env: defaults apply.
+}
+
 const PORT = 3100;
 const BASE = `http://localhost:${PORT}`;
 

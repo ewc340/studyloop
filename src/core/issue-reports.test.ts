@@ -4,6 +4,7 @@ import {
   inMemoryIssueTracker,
   NotIssueReporterError,
   reportIssue,
+  setLearnerTimezone,
   type IssueReport,
   type IssueReporting,
 } from "@/core";
@@ -58,6 +59,39 @@ describe("reporting an issue", () => {
     const tracker = inMemoryIssueTracker();
     await reportIssue(await actingAsOwner(), reportingWith(tracker), bugReport({ type: "idea" }));
     expect(tracker.issues[0].labels).toEqual(["needs-triage", "enhancement"]);
+  });
+
+  it("the issue carries the context an agent needs to reproduce it, in the owner's timezone", async () => {
+    const tracker = inMemoryIssueTracker();
+    const owner = await actingAsOwner();
+    await setLearnerTimezone(owner, "America/New_York");
+    core.clock.set("2026-11-20T15:04:00Z");
+
+    await reportIssue(owner, reportingWith(tracker), bugReport());
+
+    const { body } = tracker.issues[0];
+    expect(body).toContain("| Type | Bug |");
+    expect(body).toContain("| Page | `/topics/0b9f6c2e-1d6a-4c1e-9a53-0d4d3f1f2a10` |");
+    expect(body).toContain("| Route | `/topics/[id]` |");
+    expect(body).toContain("| Viewport | 412×839 (phone) |");
+    expect(body).toContain("| App version | `abc1234` |");
+    expect(body).toContain("| Browser | `Mozilla/5.0 (Linux; Android 14; Pixel 7) Mobile Safari/537.36` |");
+    expect(body).toContain("| Reported | 2026-11-20 10:04 (America/New_York) |");
+  });
+
+  it("a wide viewport is reported as desktop", async () => {
+    const tracker = inMemoryIssueTracker();
+    const page = { ...phonePage, viewport: { width: 1440, height: 900 } };
+    await reportIssue(await actingAsOwner(), reportingWith(tracker), bugReport({ page }));
+    expect(tracker.issues[0].body).toContain("| Viewport | 1440×900 (desktop) |");
+  });
+
+  it("query values in the page URL are redacted, since they can hold Learner data", async () => {
+    const tracker = inMemoryIssueTracker();
+    const page = { ...phonePage, url: "/topics?q=Kafka%20internals&page=2#top", route: "/topics" };
+    await reportIssue(await actingAsOwner(), reportingWith(tracker), bugReport({ page }));
+    expect(tracker.issues[0].body).toContain("| Page | `/topics?q=…&page=…` |");
+    expect(tracker.issues[0].body).not.toContain("Kafka");
   });
 
   it("only the owner may report issues", async () => {

@@ -1,5 +1,5 @@
 import type { LearnerContext } from "./context";
-import { getLearner } from "./learner";
+import { getLearner, type Learner } from "./learner";
 
 /**
  * Owner tooling: the owner reports a problem or idea from any page and it lands as a GitHub issue.
@@ -71,13 +71,21 @@ export class NotIssueReporterError extends Error {
 
 /** Whether the acting Learner may report issues: issue reporting is configured and they are the owner. */
 export async function canReportIssues(ctx: LearnerContext, reporting: IssueReporting | null): Promise<boolean> {
-  if (!reporting?.ownerEmail.trim()) return false;
-  const learner = await getLearner(ctx);
-  return learner.email.toLowerCase() === reporting.ownerEmail.trim().toLowerCase();
+  return (await ownerActing(ctx, reporting)) !== null;
 }
 
-async function assertCanReportIssues(ctx: LearnerContext, reporting: IssueReporting): Promise<void> {
-  if (!(await canReportIssues(ctx, reporting))) throw new NotIssueReporterError();
+/** The acting Learner if they are the owner, else null. */
+async function ownerActing(ctx: LearnerContext, reporting: IssueReporting | null): Promise<Learner | null> {
+  const ownerEmail = reporting?.ownerEmail.trim().toLowerCase();
+  if (!ownerEmail) return null;
+  const learner = await getLearner(ctx);
+  return learner.email.toLowerCase() === ownerEmail ? learner : null;
+}
+
+async function requireOwner(ctx: LearnerContext, reporting: IssueReporting): Promise<Learner> {
+  const owner = await ownerActing(ctx, reporting);
+  if (!owner) throw new NotIssueReporterError();
+  return owner;
 }
 
 /** Reports an issue as the acting Learner, who must be the owner. */
@@ -86,17 +94,80 @@ export async function reportIssue(
   reporting: IssueReporting,
   report: IssueReport,
 ): Promise<ReportedIssue> {
-  await assertCanReportIssues(ctx, reporting);
-  return reporting.tracker.createIssue(draftIssue(report));
+  const owner = await requireOwner(ctx, reporting);
+  const facts = { appVersion: reporting.appVersion, reportedAt: ctx.clock.now(), timezone: owner.timezone };
+  return reporting.tracker.createIssue(draftIssue(report, facts));
 }
 
-function draftIssue(report: IssueReport): IssueDraft {
+/** What the server knows about a report that the browser doesn't. */
+interface ServerFacts {
+  appVersion: string;
+  reportedAt: Date;
+  timezone: string;
+}
+
+/** Viewports up to this width are phones (below Tailwind's `md` breakpoint). */
+const PHONE_MAX_WIDTH = 767;
+
+function draftIssue(report: IssueReport, facts: ServerFacts): IssueDraft {
   const description = report.description.trim();
+  const { page } = report;
+  const { width, height } = page.viewport;
+  const context: [string, string][] = [
+    ["Type", report.type === "bug" ? "Bug" : "Idea"],
+    ["Page", code(redactQueryValues(page.url))],
+    ["Route", code(page.route)],
+    ["Viewport", `${width}×${height} (${width <= PHONE_MAX_WIDTH ? "phone" : "desktop"})`],
+    ["App version", code(facts.appVersion)],
+    ["Browser", code(page.userAgent)],
+    ["Reported", `${formatLocal(facts.reportedAt, facts.timezone)} (${facts.timezone})`],
+  ];
+  const body = [
+    description,
+    "## Context",
+    ["| | |", "| --- | --- |", ...context.map(([key, value]) => `| ${key} | ${value} |`)].join("\n"),
+    "_Reported from the studyloop app._",
+  ].join("\n\n");
   return {
     title: description.split("\n")[0].trim(),
-    body: description,
+    body,
     labels: ["needs-triage", report.type === "bug" ? "bug" : "enhancement"],
   };
+}
+
+/** Inline code for a table cell: no backtick, pipe or line break can escape it. */
+function code(text: string): string {
+  return "`" + text.replace(/[`|\r\n]/g, " ").trim() + "`";
+}
+
+/** Keeps a URL's path and query keys but drops query values and the fragment, which can hold Learner data. */
+function redactQueryValues(url: string): string {
+  const [withoutHash] = url.split("#");
+  const [path, query] = withoutHash.split("?");
+  if (!query) return path;
+  const keys = query
+    .split("&")
+    .filter(Boolean)
+    .map((pair) => `${pair.split("=")[0]}=…`);
+  return `${path}?${keys.join("&")}`;
+}
+
+/** `YYYY-MM-DD HH:mm` in the timezone. */
+function formatLocal(date: Date, timezone: string): string {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(date)
+      .map((part) => [part.type, part.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
 }
 
 export interface InMemoryIssueTracker extends IssueTracker {

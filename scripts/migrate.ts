@@ -1,5 +1,4 @@
-import { databaseUrl } from "@/core/db/client";
-import { runMigrations } from "@/core/db/migrate";
+import { databaseUrl, runMigrations } from "@/core";
 
 async function main() {
   const url = databaseUrl();

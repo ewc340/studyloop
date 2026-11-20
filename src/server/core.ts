@@ -1,15 +1,14 @@
 // Thin adapter: the only place the Next.js app builds a CoreContext.
-import { systemClock, type CoreContext } from "@/core";
-import { connect, databaseUrl, type DbHandle } from "@/core/db/client";
+import { connect, databaseUrl, systemClock, type CoreContext, type DbHandle } from "@/core";
 
 const globalForDb = globalThis as unknown as { studyloopDb?: DbHandle };
 
-function db() {
-  // Reuse one pool across hot reloads in dev.
+/** One connection pool per server process, reused across dev hot reloads. */
+function sharedDb() {
   globalForDb.studyloopDb ??= connect(databaseUrl());
   return globalForDb.studyloopDb.db;
 }
 
 export function coreContext(): CoreContext {
-  return { db: db(), clock: systemClock };
+  return { db: sharedDb(), clock: systemClock };
 }

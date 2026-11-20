@@ -1,9 +1,9 @@
 import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, inject } from "vitest";
-import { fakeClock, type CoreContext, type FakeClock } from "@/core";
-import { connect, type DbHandle } from "@/core/db/client";
+import { connect, type CoreContext, type DbHandle } from "@/core";
+import { fakeClock, type FakeClock } from "./fake-clock";
 
-export interface TestContext {
+export interface CoreTestContext {
   ctx: CoreContext;
   clock: FakeClock;
 }
@@ -12,14 +12,14 @@ export interface TestContext {
  * Gives each test a CoreContext on the run's real Postgres, with a fake Clock.
  * Every table in the public schema is emptied before each test.
  */
-export function useTestContext(): TestContext {
+export function useTestContext(): CoreTestContext {
   let handle: DbHandle;
   const clock = fakeClock();
-  const t = { clock } as TestContext;
+  const core = { clock } as CoreTestContext;
 
   beforeAll(() => {
     handle = connect(inject("databaseUrl"), { max: 2 });
-    t.ctx = { db: handle.db, clock };
+    core.ctx = { db: handle.db, clock };
   });
 
   beforeEach(async () => {
@@ -38,5 +38,5 @@ export function useTestContext(): TestContext {
     await handle.close();
   });
 
-  return t;
+  return core;
 }

@@ -1,8 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
+import { localDatabaseUrls } from "./src/core";
 
 const PORT = 3100;
-const E2E_DATABASE_URL =
-  process.env.E2E_DATABASE_URL ?? "postgres://studyloop:studyloop@localhost:5432/studyloop_e2e";
+const E2E_DATABASE_URL = process.env.E2E_DATABASE_URL ?? localDatabaseUrls.e2e;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -13,8 +13,6 @@ export default defineConfig({
   use: {
     baseURL: `http://localhost:${PORT}`,
     trace: "on-first-retry",
-    // Acts as this Learner via the test-only auth bypass (wired into auth in ticket #3).
-    extraHTTPHeaders: { "x-e2e-learner": "e2e-learner" },
   },
   // Phone-sized viewport first: the app is used right after interviews, on a phone.
   projects: [{ name: "mobile-chrome", use: { ...devices["Pixel 7"] } }],
@@ -23,6 +21,6 @@ export default defineConfig({
     url: `http://localhost:${PORT}`,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
-    env: { DATABASE_URL: E2E_DATABASE_URL, E2E_AUTH_BYPASS: "1" },
+    env: { DATABASE_URL: E2E_DATABASE_URL },
   },
 });

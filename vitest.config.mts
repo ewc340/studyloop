@@ -6,7 +6,7 @@ export default defineConfig({
     alias: { "@": path.resolve(import.meta.dirname, "src") },
   },
   test: {
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "scripts/**/*.test.ts"],
     globalSetup: ["src/test/global-setup.ts"],
     // Test files share one database and truncate between tests, so run files one at a time.
     fileParallelism: false,

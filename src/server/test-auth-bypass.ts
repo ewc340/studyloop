@@ -5,6 +5,9 @@
  */
 export const E2E_LEARNER_HEADER = "x-e2e-learner";
 
+/** Bypass Learners live under this reserved id prefix, so the bypass can never act as a real (GitHub) Learner. */
+export const E2E_LEARNER_PREFIX = "e2e-";
+
 type Env = Record<string, string | undefined>;
 
 export class TestAuthBypassInProductionError extends Error {
@@ -30,5 +33,5 @@ export function isTestAuthBypassEnabled(env: Env = process.env): boolean {
 export function bypassLearnerIdFrom(headers: Headers, env: Env = process.env): string | null {
   if (!isTestAuthBypassEnabled(env)) return null;
   const id = headers.get(E2E_LEARNER_HEADER);
-  return id && /^[a-z0-9-]+$/.test(id) ? id : null;
+  return id && /^e2e-[a-z0-9-]+$/.test(id) ? id : null;
 }

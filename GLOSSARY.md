@@ -27,7 +27,7 @@ The Learner's 1–5 self-rating of a Topic, given in a Daily Entry; its history 
 _Avoid_: Score, mastery, level
 
 **Active Day**:
-A date with a Daily Entry tagging at least one Topic.
+A date, in the Learner's own timezone, with a Daily Entry tagging at least one Topic.
 
 **Streak**:
 The number of consecutive Active Days ending today (or yesterday, if today isn't active yet).

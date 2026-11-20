@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getLearner, InvalidTimezoneError, learnerId, LearnerNotFoundError, setLearnerTimezone } from "@/core";
+import { ensureLearner, getLearner, InvalidTimezoneError, learnerId, LearnerNotFoundError, setLearnerTimezone } from "@/core";
 import { useTestContext } from "@/test/core-harness";
 import { actingAsNewLearner } from "@/test/learners";
 
@@ -23,6 +23,12 @@ describe("Learner", () => {
     await expect(setLearnerTimezone(ada, "Mars/Olympus_Mons")).rejects.toBeInstanceOf(InvalidTimezoneError);
   });
 
+  it("ensureLearner is idempotent", async () => {
+    const first = await ensureLearner(core.ctx, { id: "same", name: "First", email: "same@example.test" });
+    await ensureLearner(core.ctx, { id: "same", name: "Second", email: "same@example.test" });
+    expect((await getLearner(first)).name).toBe("First");
+  });
+
   it("fails clearly for a Learner who doesn't exist", async () => {
     const ghost = { ...core.ctx, learnerId: learnerId("nobody") };
     await expect(getLearner(ghost)).rejects.toBeInstanceOf(LearnerNotFoundError);
@@ -36,8 +42,11 @@ describe("Learner", () => {
 
       await setLearnerTimezone(ada, "Asia/Tokyo");
 
-      expect((await getLearner(ada)).name).toBe("Ada");
-      expect(await getLearner(grace)).toMatchObject({ name: "Grace", timezone: "UTC" });
+      // Each Learner reads only themselves...
+      expect(await getLearner(ada)).toMatchObject({ id: ada.learnerId, name: "Ada", timezone: "Asia/Tokyo" });
+      expect(await getLearner(grace)).toMatchObject({ id: grace.learnerId, name: "Grace" });
+      // ...and Ada's write didn't touch Grace.
+      expect((await getLearner(grace)).timezone).toBe("UTC");
     });
   });
 });

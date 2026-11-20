@@ -20,7 +20,11 @@ describe("test auth bypass", () => {
   });
 
   it("ignores malformed Learner ids", () => {
-    expect(bypassLearnerIdFrom(headers("Robert'); drop"), { E2E_AUTH_BYPASS: "1" })).toBeNull();
+    expect(bypassLearnerIdFrom(headers("e2e-Robert'); drop"), { E2E_AUTH_BYPASS: "1" })).toBeNull();
+  });
+
+  it("can only act as reserved e2e- Learners, never a real one", () => {
+    expect(bypassLearnerIdFrom(headers("abc123realgithublearner"), { E2E_AUTH_BYPASS: "1" })).toBeNull();
   });
 
   it("refuses to start in production", () => {

@@ -1,5 +1,7 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
 import type { TopicTimelineEntry } from "@/core";
+import { formatCalendarDate } from "../../entries/format";
 
 /** A Topic's timeline, oldest first. Each record type tagged with the Topic renders through TimelineItem. */
 export function TopicTimeline({ entries }: { entries: TopicTimelineEntry[] }) {
@@ -28,6 +30,27 @@ export function TopicTimeline({ entries }: { entries: TopicTimelineEntry[] }) {
 
 /** Renders one timeline entry. Add a case per TopicTimelineEntry variant; the compiler flags any left out. */
 function TimelineItem({ entry }: { entry: TopicTimelineEntry }): ReactNode {
-  const unhandled: never = entry;
-  return unhandled;
+  switch (entry.kind) {
+    case "dailyEntry":
+      return (
+        <article className="flex flex-col gap-1">
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            Daily Entry ·{" "}
+            <Link href={`/entries/${entry.date}`} className="font-medium text-blue-700 underline dark:text-blue-400">
+              {formatCalendarDate(entry.date)}
+            </Link>{" "}
+            · Confidence {entry.confidence}/5
+          </p>
+          {entry.body && (
+            <p data-private className="line-clamp-4 whitespace-pre-line text-zinc-800 dark:text-zinc-200">
+              {entry.body}
+            </p>
+          )}
+        </article>
+      );
+    default: {
+      const unhandled: never = entry.kind;
+      return unhandled;
+    }
+  }
 }

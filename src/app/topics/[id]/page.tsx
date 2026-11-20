@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { getTopicPage, topicId, TopicNotFoundError, type TopicPage } from "@/core";
 import { requireLearnerContext } from "@/server/learner";
+import { TopicConfidenceSection } from "./topic-confidence";
 import { TopicTimeline } from "./topic-timeline";
 
 async function loadTopicPage(id: string): Promise<TopicPage> {
@@ -16,7 +17,7 @@ async function loadTopicPage(id: string): Promise<TopicPage> {
 
 async function TopicDetails({ params }: { params: PageProps<"/topics/[id]">["params"] }) {
   const { id } = await params;
-  const { topic, timeline } = await loadTopicPage(id);
+  const { topic, timeline, confidence } = await loadTopicPage(id);
   return (
     <>
       <header data-testid="topic-header" className="flex flex-col gap-1">
@@ -29,6 +30,7 @@ async function TopicDetails({ params }: { params: PageProps<"/topics/[id]">["par
           </p>
         )}
       </header>
+      <TopicConfidenceSection confidence={confidence} />
       <TopicTimeline entries={timeline} />
     </>
   );

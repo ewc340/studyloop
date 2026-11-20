@@ -1,6 +1,7 @@
 import { and, asc, eq, ilike, sql } from "drizzle-orm";
 import type { LearnerContext } from "./context";
-import { topic } from "./db/schema";
+import type { CalendarDate, Confidence } from "./daily-entries";
+import { dailyEntry, dailyEntryTopic, topic, user } from "./db/schema";
 
 /** Identifies a Topic. Branded so other ids can't be passed where a Topic is meant. */
 export type TopicId = string & { readonly __brand: "TopicId" };
@@ -23,14 +24,39 @@ export interface NewTopic {
 /**
  * One record on a Topic's timeline: a union with one variant per record type tagged with the Topic
  * (Daily Entries, Resources, Gaps, Struggle Reflections, Study Items), each shaped
- * `{ kind: "<record type>"; occurredAt: Date; ... }`. No record type can be tagged yet, so it has no variants.
+ * `{ kind: "<record type>"; occurredAt: Date; ... }`.
  */
-export type TopicTimelineEntry = never;
+export type TopicTimelineEntry = DailyEntryTimelineEntry;
+
+/** A Daily Entry tagging the Topic, placed at the start of its date in the Learner's timezone. */
+export interface DailyEntryTimelineEntry {
+  kind: "dailyEntry";
+  occurredAt: Date;
+  date: CalendarDate;
+  /** What the Learner worked on and learned that day (the whole entry, not just this Topic). */
+  body: string;
+  /** The Learner's Confidence in the Topic on that date. */
+  confidence: Confidence;
+}
+
+/** The Learner's Confidence in a Topic as rated in the Daily Entry for a date. */
+export interface ConfidenceRating {
+  date: CalendarDate;
+  confidence: Confidence;
+}
+
+export interface TopicConfidence {
+  /** The rating from the most recent date, or null if no Daily Entry has rated the Topic. */
+  latest: ConfidenceRating | null;
+  /** Every rating, oldest date first. */
+  history: ConfidenceRating[];
+}
 
 export interface TopicPage {
   topic: Topic;
   /** Everything tagged with the Topic, oldest first. */
   timeline: TopicTimelineEntry[];
+  confidence: TopicConfidence;
 }
 
 /** No Topic with this id belongs to the acting Learner. */
@@ -137,7 +163,40 @@ function escapeLikePattern(text: string): string {
  */
 type TimelineSource = (ctx: LearnerContext, id: TopicId) => Promise<TopicTimelineEntry[]>;
 
-const timelineSources: TimelineSource[] = [];
+/** The Topic's Confidence ratings from the acting Learner's Daily Entries, oldest date first. */
+async function confidenceRatings(ctx: LearnerContext, id: TopicId): Promise<ConfidenceRating[]> {
+  const rows = await ctx.db
+    .select({ date: dailyEntry.date, confidence: dailyEntryTopic.confidence })
+    .from(dailyEntryTopic)
+    .innerJoin(dailyEntry, eq(dailyEntry.id, dailyEntryTopic.dailyEntryId))
+    .where(and(eq(dailyEntryTopic.topicId, id), eq(dailyEntry.userId, ctx.learnerId)))
+    .orderBy(asc(dailyEntry.date));
+  return rows.map((r) => ({ date: r.date, confidence: r.confidence as Confidence }));
+}
+
+const dailyEntryTimeline: TimelineSource = async (ctx, id) => {
+  const rows = await ctx.db
+    .select({
+      date: dailyEntry.date,
+      body: dailyEntry.body,
+      confidence: dailyEntryTopic.confidence,
+      // Midnight at the start of the date, wherever the Learner lives.
+      occurredAt: sql<string>`(${dailyEntry.date}::timestamp at time zone ${user.timezone})`,
+    })
+    .from(dailyEntryTopic)
+    .innerJoin(dailyEntry, eq(dailyEntry.id, dailyEntryTopic.dailyEntryId))
+    .innerJoin(user, eq(user.id, dailyEntry.userId))
+    .where(and(eq(dailyEntryTopic.topicId, id), eq(dailyEntry.userId, ctx.learnerId)));
+  return rows.map((r) => ({
+    kind: "dailyEntry",
+    occurredAt: new Date(r.occurredAt),
+    date: r.date,
+    body: r.body,
+    confidence: r.confidence as Confidence,
+  }));
+};
+
+const timelineSources: TimelineSource[] = [dailyEntryTimeline];
 
 /** What every TopicTimelineEntry variant has in common. */
 interface TimelineEntryShape {
@@ -165,7 +224,10 @@ export async function getTopicPage(ctx: LearnerContext, id: TopicId): Promise<To
     .where(and(eq(topic.id, id), eq(topic.userId, ctx.learnerId)));
   if (!row) throw new TopicNotFoundError(id);
 
-  const entries = await Promise.all(timelineSources.map((source) => source(ctx, id)));
+  const [entries, history] = await Promise.all([
+    Promise.all(timelineSources.map((source) => source(ctx, id))),
+    confidenceRatings(ctx, id),
+  ]);
   const timeline = entries.flat().sort(byOccurredAt);
-  return { topic: toTopic(row), timeline };
+  return { topic: toTopic(row), timeline, confidence: { latest: history.at(-1) ?? null, history } };
 }

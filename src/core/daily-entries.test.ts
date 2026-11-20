@@ -4,6 +4,7 @@ import {
   FutureDailyEntryError,
   getDailyEntry,
   getToday,
+  getTopicPage,
   InvalidConfidenceError,
   InvalidDailyEntryError,
   listDailyEntries,
@@ -219,6 +220,96 @@ describe("Daily Entries", () => {
       await expect(saveDailyEntry(ada, { date: "2026-01-01", body: "  ", topics: [] })).rejects.toBeInstanceOf(
         InvalidDailyEntryError,
       );
+    });
+  });
+
+  describe("on the Topic page", () => {
+    it("shows the Daily Entries tagging the Topic on its timeline, oldest first", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      const caching = await createTopic(ada, { name: "Caching" });
+      const toolCalling = await createTopic(ada, { name: "Tool calling" });
+      await saveDailyEntry(ada, {
+        date: "2026-01-01",
+        body: "Write-through vs write-back",
+        topics: [{ topicId: caching.id, confidence: 3 }],
+      });
+      await saveDailyEntry(ada, {
+        date: "2025-12-31",
+        body: "Cache keys",
+        topics: [{ topicId: caching.id, confidence: 2 }],
+      });
+      await saveDailyEntry(ada, {
+        date: "2025-12-30",
+        body: "Only tool calling today",
+        topics: [{ topicId: toolCalling.id, confidence: 4 }],
+      });
+
+      expect((await getTopicPage(ada, caching.id)).timeline).toEqual([
+        {
+          kind: "dailyEntry",
+          occurredAt: new Date("2025-12-31T00:00:00Z"),
+          date: "2025-12-31",
+          body: "Cache keys",
+          confidence: 2,
+        },
+        {
+          kind: "dailyEntry",
+          occurredAt: new Date("2026-01-01T00:00:00Z"),
+          date: "2026-01-01",
+          body: "Write-through vs write-back",
+          confidence: 3,
+        },
+      ]);
+    });
+
+    it("places a Daily Entry on the timeline at the start of its date in the Learner's timezone", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      await setLearnerTimezone(ada, "America/Los_Angeles");
+      const caching = await createTopic(ada, { name: "Caching" });
+      await saveDailyEntry(ada, { date: "2025-12-31", body: "", topics: [{ topicId: caching.id, confidence: 3 }] });
+
+      const [entry] = (await getTopicPage(ada, caching.id)).timeline;
+      expect(entry.occurredAt).toEqual(new Date("2025-12-31T08:00:00Z"));
+    });
+
+    it("shows the latest Confidence, from the most recent date, and its history oldest first", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      const caching = await createTopic(ada, { name: "Caching" });
+      for (const [date, confidence] of [
+        ["2025-12-20", 1],
+        ["2026-01-01", 4],
+        // Backfilled after the newer entry: history follows the dates, not the order they were written in.
+        ["2025-12-25", 2],
+      ] as const) {
+        await saveDailyEntry(ada, { date, body: "", topics: [{ topicId: caching.id, confidence }] });
+      }
+
+      expect((await getTopicPage(ada, caching.id)).confidence).toEqual({
+        latest: { date: "2026-01-01", confidence: 4 },
+        history: [
+          { date: "2025-12-20", confidence: 1 },
+          { date: "2025-12-25", confidence: 2 },
+          { date: "2026-01-01", confidence: 4 },
+        ],
+      });
+    });
+
+    it("re-rating a Topic in the same day's entry replaces that day's Confidence", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      const caching = await createTopic(ada, { name: "Caching" });
+      await saveDailyEntry(ada, { date: "2026-01-01", body: "", topics: [{ topicId: caching.id, confidence: 2 }] });
+      await saveDailyEntry(ada, { date: "2026-01-01", body: "", topics: [{ topicId: caching.id, confidence: 5 }] });
+
+      expect((await getTopicPage(ada, caching.id)).confidence).toEqual({
+        latest: { date: "2026-01-01", confidence: 5 },
+        history: [{ date: "2026-01-01", confidence: 5 }],
+      });
+    });
+
+    it("has no Confidence until a Daily Entry rates the Topic", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      const caching = await createTopic(ada, { name: "Caching" });
+      expect((await getTopicPage(ada, caching.id)).confidence).toEqual({ latest: null, history: [] });
     });
   });
 

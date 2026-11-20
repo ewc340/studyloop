@@ -1,0 +1,49 @@
+import { describe, expect, it } from "vitest";
+import { inMemoryIssueTracker, reportIssue, type IssueReport, type IssueReporting } from "@/core";
+import { useTestContext } from "@/test/core-harness";
+import { actingAsNewLearner } from "@/test/learners";
+
+const core = useTestContext();
+
+const OWNER_EMAIL = "owner@example.test";
+
+function reportingWith(tracker = inMemoryIssueTracker()): IssueReporting {
+  return { tracker, ownerEmail: OWNER_EMAIL, appVersion: "abc1234" };
+}
+
+function actingAsOwner() {
+  return actingAsNewLearner(core.ctx, { id: "owner", email: OWNER_EMAIL });
+}
+
+const phonePage = {
+  url: "/topics/0b9f6c2e-1d6a-4c1e-9a53-0d4d3f1f2a10",
+  route: "/topics/[id]",
+  viewport: { width: 412, height: 839 },
+  userAgent: "Mozilla/5.0 (Linux; Android 14; Pixel 7) Mobile Safari/537.36",
+};
+
+function bugReport(overrides: Partial<IssueReport> = {}): IssueReport {
+  return {
+    type: "bug",
+    description: "The Topic header overflows on a phone\n\nLong names don't wrap.",
+    page: phonePage,
+    images: [],
+    ...overrides,
+  };
+}
+
+describe("reporting an issue", () => {
+  it("the owner's bug report becomes a GitHub issue labelled for triage", async () => {
+    const tracker = inMemoryIssueTracker();
+    const owner = await actingAsOwner();
+
+    const reported = await reportIssue(owner, reportingWith(tracker), bugReport());
+
+    expect(tracker.issues).toHaveLength(1);
+    const [issue] = tracker.issues;
+    expect(issue.title).toBe("The Topic header overflows on a phone");
+    expect(issue.labels).toEqual(["needs-triage", "bug"]);
+    expect(issue.body).toContain("The Topic header overflows on a phone\n\nLong names don't wrap.");
+    expect(reported).toEqual({ number: issue.number, url: issue.url });
+  });
+});

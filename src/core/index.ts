@@ -38,3 +38,16 @@ export { runMigrations } from "./db/migrate";
 export { localDatabaseUrls } from "./db/local";
 export { createDatabaseIfMissing, dropDatabase, withDatabaseName } from "./db/admin";
 export { authTables } from "./db/auth-tables";
+export {
+  inMemoryIssueTracker,
+  reportIssue,
+  type InMemoryIssueTracker,
+  type IssueDraft,
+  type IssueReport,
+  type IssueReportImage,
+  type IssueReporting,
+  type IssueReportPage,
+  type IssueReportType,
+  type IssueTracker,
+  type ReportedIssue,
+} from "./issue-reports";

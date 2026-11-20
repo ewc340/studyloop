@@ -39,7 +39,7 @@ function TimelineItem({ entry }: { entry: TopicTimelineEntry }): ReactNode {
             <Link href={`/entries/${entry.date}`} className="font-medium text-blue-700 underline dark:text-blue-400">
               {formatCalendarDate(entry.date)}
             </Link>{" "}
-            · Confidence {entry.confidence}/5
+            · Confidence <span data-private>{entry.confidence}/5</span>
           </p>
           {entry.body && (
             <p data-private className="line-clamp-4 whitespace-pre-line text-zinc-800 dark:text-zinc-200">

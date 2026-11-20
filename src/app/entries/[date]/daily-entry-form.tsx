@@ -56,7 +56,7 @@ export function DailyEntryForm({ topics, entry, action }: DailyEntryFormProps) {
                 <span className="sr-only">Confidence in </span>
                 <span data-private>{topic.name}</span>
               </legend>
-              <div className="grid grid-cols-5 gap-2">
+              <div data-private className="grid grid-cols-5 gap-2">
                 {CONFIDENCES.map((value) => (
                   <label
                     key={value}

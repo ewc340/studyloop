@@ -76,6 +76,12 @@ export function isCalendarDate(date: string): date is CalendarDate {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date;
 }
 
+/** Whether `date` comes after `today`: no Daily Entry can be written for it yet. */
+export function isFutureDate(date: CalendarDate, today: CalendarDate): boolean {
+  // YYYY-MM-DD strings sort chronologically.
+  return date > today;
+}
+
 /** Today's date in the acting Learner's own timezone. */
 export async function getToday(ctx: LearnerContext): Promise<CalendarDate> {
   const { timezone } = await getLearner(ctx);
@@ -100,15 +106,17 @@ export async function saveDailyEntry(ctx: LearnerContext, input: DailyEntryInput
   if (new Set(topicIds).size !== topicIds.length) {
     throw new InvalidDailyEntryError("Each Topic can be tagged only once");
   }
-  // YYYY-MM-DD strings sort chronologically.
-  if (input.date > (await getToday(ctx))) throw new FutureDailyEntryError(input.date);
+  if (isFutureDate(input.date, await getToday(ctx))) throw new FutureDailyEntryError(input.date);
   await requireOwnTopics(ctx, topicIds);
 
   await ctx.db.transaction(async (tx) => {
     const [row] = await tx
       .insert(dailyEntry)
       .values({ userId: ctx.learnerId, date: input.date, body })
-      .onConflictDoUpdate({ target: [dailyEntry.userId, dailyEntry.date], set: { body } })
+      .onConflictDoUpdate({
+        target: [dailyEntry.userId, dailyEntry.date],
+        set: { body, updatedAt: ctx.clock.now() },
+      })
       .returning({ id: dailyEntry.id });
     await tx.delete(dailyEntryTopic).where(eq(dailyEntryTopic.dailyEntryId, row.id));
     if (input.topics.length > 0) {

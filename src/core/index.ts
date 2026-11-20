@@ -42,6 +42,7 @@ export {
   InvalidDailyEntryError,
   isCalendarDate,
   isConfidence,
+  isFutureDate,
   listDailyEntries,
   saveDailyEntry,
   type CalendarDate,

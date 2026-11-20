@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { findTopics, getDailyEntry, getToday, isCalendarDate } from "@/core";
+import { findTopics, getDailyEntry, getToday, isCalendarDate, isFutureDate } from "@/core";
 import { requireLearnerContext } from "@/server/learner";
 import { submitDailyEntry } from "../actions";
 import { formatCalendarDate } from "../format";
@@ -24,8 +24,7 @@ async function DailyEntryEditor({ params }: { params: PageProps<"/entries/[date]
     </h1>
   );
 
-  // YYYY-MM-DD strings sort chronologically.
-  if (date > today) {
+  if (isFutureDate(date, today)) {
     return (
       <>
         {heading}

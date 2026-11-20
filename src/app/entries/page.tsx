@@ -67,7 +67,7 @@ async function DailyEntryList() {
                         className="flex items-center gap-1.5 rounded-full bg-zinc-100 px-3 py-1 text-sm dark:bg-zinc-800"
                       >
                         <span data-private>{topic.name}</span>
-                        <span className="text-zinc-600 dark:text-zinc-400">
+                        <span data-private className="text-zinc-600 dark:text-zinc-400">
                           <span className="sr-only">Confidence </span>
                           {confidence}/5
                         </span>

@@ -163,17 +163,6 @@ function escapeLikePattern(text: string): string {
  */
 type TimelineSource = (ctx: LearnerContext, id: TopicId) => Promise<TopicTimelineEntry[]>;
 
-/** The Topic's Confidence ratings from the acting Learner's Daily Entries, oldest date first. */
-async function confidenceRatings(ctx: LearnerContext, id: TopicId): Promise<ConfidenceRating[]> {
-  const rows = await ctx.db
-    .select({ date: dailyEntry.date, confidence: dailyEntryTopic.confidence })
-    .from(dailyEntryTopic)
-    .innerJoin(dailyEntry, eq(dailyEntry.id, dailyEntryTopic.dailyEntryId))
-    .where(and(eq(dailyEntryTopic.topicId, id), eq(dailyEntry.userId, ctx.learnerId)))
-    .orderBy(asc(dailyEntry.date));
-  return rows.map((r) => ({ date: r.date, confidence: r.confidence as Confidence }));
-}
-
 const dailyEntryTimeline: TimelineSource = async (ctx, id) => {
   const rows = await ctx.db
     .select({
@@ -224,10 +213,12 @@ export async function getTopicPage(ctx: LearnerContext, id: TopicId): Promise<To
     .where(and(eq(topic.id, id), eq(topic.userId, ctx.learnerId)));
   if (!row) throw new TopicNotFoundError(id);
 
-  const [entries, history] = await Promise.all([
-    Promise.all(timelineSources.map((source) => source(ctx, id))),
-    confidenceRatings(ctx, id),
-  ]);
+  const entries = await Promise.all(timelineSources.map((source) => source(ctx, id)));
   const timeline = entries.flat().sort(byOccurredAt);
+  // Confidence history is derived from the Daily Entries rating the Topic, which the timeline already
+  // holds in date order (each sits at the start of its date, in the same timezone).
+  const history: ConfidenceRating[] = timeline
+    .filter((entry) => entry.kind === "dailyEntry")
+    .map(({ date, confidence }) => ({ date, confidence }));
   return { topic: toTopic(row), timeline, confidence: { latest: history.at(-1) ?? null, history } };
 }

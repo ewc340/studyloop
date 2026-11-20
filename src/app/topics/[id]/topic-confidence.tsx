@@ -12,7 +12,7 @@ export function TopicConfidenceSection({ confidence }: { confidence: TopicConfid
       {latest ? (
         <>
           <p data-testid="latest-confidence" className="flex items-baseline gap-2">
-            <span className="text-3xl font-semibold">{latest.confidence}/5</span>
+            <span data-private className="text-3xl font-semibold">{latest.confidence}/5</span>
             <span className="text-sm text-zinc-600 dark:text-zinc-400">on {formatCalendarDate(latest.date)}</span>
           </p>
           {history.length > 1 && (
@@ -32,7 +32,7 @@ export function TopicConfidenceSection({ confidence }: { confidence: TopicConfid
                 {history.toReversed().map((rating) => (
                   <tr key={rating.date}>
                     <td className="py-1.5">{formatCalendarDate(rating.date)}</td>
-                    <td className="py-1.5 text-right tabular-nums">{rating.confidence}/5</td>
+                    <td data-private className="py-1.5 text-right tabular-nums">{rating.confidence}/5</td>
                   </tr>
                 ))}
               </tbody>

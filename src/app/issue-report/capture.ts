@@ -24,6 +24,8 @@ export async function capturePage(): Promise<Blob> {
     scale: Math.min(window.devicePixelRatio || 1, 2),
     backgroundColor: getComputedStyle(body).backgroundColor,
     width: document.documentElement.clientWidth,
+    // The copy of <body> otherwise picks up the browser's default 8px margin, shifting everything.
+    style: { margin: getComputedStyle(body).margin },
     filter: (node) =>
       !(node instanceof Element) || (!node.hasAttribute(REPORT_UI_ATTRIBUTE) && node.localName !== "nextjs-portal"),
     onCloneNode: (clone) => {

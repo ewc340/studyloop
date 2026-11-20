@@ -29,6 +29,10 @@ export default defineConfig({
       E2E_AUTH_BYPASS: "1",
       BETTER_AUTH_URL: `http://localhost:${PORT}`,
       NEXT_DIST_DIR: ".next-e2e",
+      // Issue reporting for the e2e owner, against an in-memory tracker instead of GitHub.
+      ISSUE_REPORTING_GITHUB_TOKEN: "e2e-not-a-token",
+      ISSUE_REPORTING_OWNER_EMAIL: "e2e-owner@e2e.test",
+      ISSUE_REPORTING_FAKE_TRACKER: "1",
     },
   },
 });

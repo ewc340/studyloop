@@ -28,6 +28,8 @@ export function IssueReportSheet({ repository }: { repository: string }) {
   const params = useParams();
   const dialog = useRef<HTMLDialogElement>(null);
   const [capturing, setCapturing] = useState(false);
+  // The sheet's contents only exist while it's open, so they never mix with the page's own controls.
+  const [isOpen, setIsOpen] = useState(false);
   const [step, setStep] = useState<Step>({ name: "editing" });
   const [type, setType] = useState<IssueReportType>("bug");
   const [description, setDescription] = useState("");
@@ -58,6 +60,7 @@ export function IssueReportSheet({ repository }: { repository: string }) {
     }
     setError(null);
     if (step.name !== "editing") setStep({ name: "editing" });
+    setIsOpen(true);
     dialog.current?.showModal();
   }
 
@@ -152,9 +155,13 @@ export function IssueReportSheet({ repository }: { repository: string }) {
       <dialog
         ref={dialog}
         aria-labelledby="issue-report-title"
-        onClose={() => step.name === "sent" && reset()}
+        onClose={() => {
+          setIsOpen(false);
+          if (step.name === "sent") reset();
+        }}
         className="m-0 mt-auto max-h-[92dvh] w-full max-w-none rounded-t-2xl bg-white p-0 text-zinc-900 backdrop:bg-black/50 sm:m-auto sm:max-w-lg sm:rounded-2xl dark:bg-zinc-900 dark:text-zinc-100"
       >
+        {isOpen && (
         <div className="flex flex-col gap-4 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="flex items-center justify-between gap-4">
             <h2 id="issue-report-title" className="text-lg font-semibold">
@@ -388,6 +395,7 @@ export function IssueReportSheet({ repository }: { repository: string }) {
             </div>
           )}
         </div>
+        )}
       </dialog>
     </div>
   );

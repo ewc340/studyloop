@@ -24,7 +24,7 @@ For a new ticket, push the branch and open a **draft** PR right away so progress
 - Use the `tdd` skill. Test through the core's public interface (`src/core/index.ts`) with `useTestContext()`, the established seam. Add UI as thin adapters in `src/app`.
 - Before writing Next.js code, read the relevant guide in `node_modules/next/dist/docs/` (this is Next 16; your training data is out of date).
 - Run typecheck and the single test file you're working on often; run `npm run check` at the end.
-- **Flake check:** for every e2e spec you added or changed, run `npx playwright test <spec> --repeat-each=5 --retries=0` before marking the PR ready. Any failure is a timing bug in the test or the app: find the cause and fix it; never add retries, sleeps or longer timeouts to make it pass. (CI fails on flaky tests.)
+- **Flake check:** for every e2e spec you added or changed, run `npx playwright test <spec> --repeat-each=5 --retries=0`. Any failure is a timing or isolation bug in the test or the app: find the cause and fix it (for isolation, give each test its own Learner, as `e2e/topics.spec.ts` does). Never add retries or sleeps to make it pass; a longer timeout is acceptable only on a single assertion, with the reason stated in the PR.
 - **After every green step, commit and push** (`git push origin <branch>`). Small commits; if the run is cut off, little is lost. These work-in-progress pushes sit behind the draft PR, which CLAUDE.md allows; `npm run check` must pass before the PR is marked ready.
 - Schema changes: `npm run db:generate` and commit the migration. Dependency changes: `npm run deps:relock` and commit the lockfile.
 - Keep to the ticket. If something nearby is broken or missing, note it in the PR instead of fixing it.
@@ -41,6 +41,7 @@ Use the `code-review` skill with fixed point `origin/main` and ticket #<n> as th
 ## 6. Hand over
 
 - Use the `pr` skill to write the PR body. Put `Closes #<n>` first. Embed the screenshots in Evidence as `![<page>](https://github.com/<owner>/<repo>/blob/<commit-sha>/docs/screenshots/<n>/<file>.png?raw=true)`. Add a `## Review` section listing found / fixed / not fixed (with reasons).
+- Before marking ready: `npm run check` passes and the flake check (step 3) passes for every added or changed e2e spec.
 - `gh pr edit <pr> --body-file <file>`, then `gh pr ready <pr>`.
 - Wait for CI (`gh run watch <run-id> --exit-status`). If it fails, fix and push until it passes.
 - End your run with the final line `DONE #<n> <pr-url>`.

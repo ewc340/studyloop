@@ -4,4 +4,6 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+bash ralph/sync-main.sh
+
 exec claude --permission-mode auto "$(cat ralph/prompt.md)"

@@ -15,6 +15,9 @@ for i in $(seq 1 "$MAX"); do
   log="ralph/logs/$stamp.jsonl"
   printf '\n━━━ AFK iteration %s/%s · %s · transcript: %s ━━━\n' "$i" "$MAX" "$stamp" "$log"
 
+  # Each run starts from the latest main (the previous run ended on its ticket branch).
+  bash ralph/sync-main.sh || exit 1
+
   claude -p "$(cat ralph/prompt.md)" \
     --permission-mode auto \
     --output-format stream-json --verbose \

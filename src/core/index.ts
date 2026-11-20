@@ -17,6 +17,7 @@ export {
 } from "./learner";
 export {
   createTopic,
+  DuplicateTopicNameError,
   getTopicPage,
   InvalidTopicError,
   type NewTopic, type Topic, type TopicId, type TopicPage } from "./topics";

@@ -19,6 +19,7 @@
     "deps:relock": "rm -rf node_modules package-lock.json && npm install"
   },
   "dependencies": {
+    "better-auth": "^1.7.26",
     "drizzle-orm": "^0.45.4",
     "next": "16.4.6",
     "postgres": "^4.1.1",

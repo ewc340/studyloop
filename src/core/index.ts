@@ -39,7 +39,9 @@ export { localDatabaseUrls } from "./db/local";
 export { createDatabaseIfMissing, dropDatabase, withDatabaseName } from "./db/admin";
 export { authTables } from "./db/auth-tables";
 export {
+  canReportIssues,
   inMemoryIssueTracker,
+  NotIssueReporterError,
   reportIssue,
   type InMemoryIssueTracker,
   type IssueDraft,

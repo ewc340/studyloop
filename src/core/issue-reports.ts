@@ -1,4 +1,5 @@
 import type { LearnerContext } from "./context";
+import { getLearner } from "./learner";
 
 /**
  * Owner tooling: the owner reports a problem or idea from any page and it lands as a GitHub issue.
@@ -60,13 +61,32 @@ export interface IssueReporting {
   appVersion: string;
 }
 
+/** Only the owner may report issues. */
+export class NotIssueReporterError extends Error {
+  constructor() {
+    super("Only the owner can report issues");
+    this.name = "NotIssueReporterError";
+  }
+}
+
+/** Whether the acting Learner may report issues: issue reporting is configured and they are the owner. */
+export async function canReportIssues(ctx: LearnerContext, reporting: IssueReporting | null): Promise<boolean> {
+  if (!reporting?.ownerEmail.trim()) return false;
+  const learner = await getLearner(ctx);
+  return learner.email.toLowerCase() === reporting.ownerEmail.trim().toLowerCase();
+}
+
+async function assertCanReportIssues(ctx: LearnerContext, reporting: IssueReporting): Promise<void> {
+  if (!(await canReportIssues(ctx, reporting))) throw new NotIssueReporterError();
+}
+
 /** Reports an issue as the acting Learner, who must be the owner. */
 export async function reportIssue(
   ctx: LearnerContext,
   reporting: IssueReporting,
   report: IssueReport,
 ): Promise<ReportedIssue> {
-  void ctx;
+  await assertCanReportIssues(ctx, reporting);
   return reporting.tracker.createIssue(draftIssue(report));
 }
 

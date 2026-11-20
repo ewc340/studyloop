@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { inMemoryIssueTracker, reportIssue, type IssueReport, type IssueReporting } from "@/core";
+import {
+  canReportIssues,
+  inMemoryIssueTracker,
+  NotIssueReporterError,
+  reportIssue,
+  type IssueReport,
+  type IssueReporting,
+} from "@/core";
 import { useTestContext } from "@/test/core-harness";
 import { actingAsNewLearner } from "@/test/learners";
 
@@ -45,5 +52,24 @@ describe("reporting an issue", () => {
     expect(issue.labels).toEqual(["needs-triage", "bug"]);
     expect(issue.body).toContain("The Topic header overflows on a phone\n\nLong names don't wrap.");
     expect(reported).toEqual({ number: issue.number, url: issue.url });
+  });
+
+  it("an idea is labelled as an enhancement", async () => {
+    const tracker = inMemoryIssueTracker();
+    await reportIssue(await actingAsOwner(), reportingWith(tracker), bugReport({ type: "idea" }));
+    expect(tracker.issues[0].labels).toEqual(["needs-triage", "enhancement"]);
+  });
+
+  it("only the owner may report issues", async () => {
+    const tracker = inMemoryIssueTracker();
+    const reporting = reportingWith(tracker);
+    const owner = await actingAsNewLearner(core.ctx, { id: "owner", email: "Owner@Example.test" });
+    const someoneElse = await actingAsNewLearner(core.ctx);
+
+    expect(await canReportIssues(owner, reporting)).toBe(true);
+    expect(await canReportIssues(someoneElse, reporting)).toBe(false);
+    expect(await canReportIssues(owner, null)).toBe(false);
+    await expect(reportIssue(someoneElse, reporting, bugReport())).rejects.toThrow(NotIssueReporterError);
+    expect(tracker.issues).toHaveLength(0);
   });
 });

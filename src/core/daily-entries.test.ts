@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { createTopic, getDailyEntry, listDailyEntries, saveDailyEntry } from "@/core";
+import {
+  createTopic,
+  FutureDailyEntryError,
+  getDailyEntry,
+  getToday,
+  InvalidDailyEntryError,
+  listDailyEntries,
+  saveDailyEntry,
+  setLearnerTimezone,
+} from "@/core";
 import { useTestContext } from "@/test/core-harness";
 import { actingAsNewLearner } from "@/test/learners";
 
@@ -33,6 +42,7 @@ describe("Daily Entries", () => {
   it("has no Daily Entry for a date nothing was written on", async () => {
     const ada = await actingAsNewLearner(core.ctx);
     expect(await getDailyEntry(ada, "2026-01-01")).toBeNull();
+    expect(await getDailyEntry(ada, "2026-02-30")).toBeNull();
   });
 
   describe("at most one per date", () => {
@@ -85,6 +95,48 @@ describe("Daily Entries", () => {
 
       expect(await getDailyEntry(ada, "2026-01-01")).toMatchObject({ body: "Ada's day" });
       expect(await getDailyEntry(grace, "2026-01-01")).toMatchObject({ body: "Grace's day" });
+    });
+  });
+
+  describe("dates", () => {
+    it("backfills a past date", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      await saveDailyEntry(ada, { date: "2025-06-01", body: "Forgot to log this", topics: [] });
+
+      expect(await getDailyEntry(ada, "2025-06-01")).toMatchObject({ body: "Forgot to log this" });
+    });
+
+    it("rejects a future date, and writes nothing", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      await expect(saveDailyEntry(ada, { date: "2026-01-02", body: "Tomorrow", topics: [] })).rejects.toBeInstanceOf(
+        FutureDailyEntryError,
+      );
+      expect(await listDailyEntries(ada)).toEqual([]);
+    });
+
+    it("decides what today is in the Learner's own timezone", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      // 05:00 UTC on 1 January is still 31 December in Los Angeles, and already 1 January in Auckland.
+      core.clock.set("2026-01-01T05:00:00Z");
+
+      await setLearnerTimezone(ada, "America/Los_Angeles");
+      expect(await getToday(ada)).toBe("2025-12-31");
+      await expect(saveDailyEntry(ada, { date: "2026-01-01", body: "x", topics: [] })).rejects.toBeInstanceOf(
+        FutureDailyEntryError,
+      );
+
+      await setLearnerTimezone(ada, "Pacific/Auckland");
+      expect(await getToday(ada)).toBe("2026-01-01");
+      await expect(saveDailyEntry(ada, { date: "2026-01-01", body: "x", topics: [] })).resolves.toMatchObject({
+        date: "2026-01-01",
+      });
+    });
+
+    it.each(["2026-02-30", "2026-1-1", "yesterday", ""])("rejects %j, which isn't a calendar date", async (date) => {
+      const ada = await actingAsNewLearner(core.ctx);
+      await expect(saveDailyEntry(ada, { date, body: "x", topics: [] })).rejects.toBeInstanceOf(
+        InvalidDailyEntryError,
+      );
     });
   });
 

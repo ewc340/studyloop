@@ -32,7 +32,11 @@ export {
   type TopicTimelineEntry,
 } from "./topics";
 export {
+  FutureDailyEntryError,
   getDailyEntry,
+  getToday,
+  InvalidDailyEntryError,
+  isCalendarDate,
   listDailyEntries,
   saveDailyEntry,
   type CalendarDate,

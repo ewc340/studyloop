@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import type { LearnerContext } from "./context";
 import { dailyEntry, dailyEntryTopic, topic } from "./db/schema";
+import { getLearner } from "./learner";
 import { topicId, type Topic, type TopicId } from "./topics";
 
 /** A calendar date in the Learner's own timezone, as `YYYY-MM-DD`. */
@@ -28,8 +29,44 @@ export interface DailyEntryInput {
   topics: { topicId: TopicId; confidence: number }[];
 }
 
-/** Writes the acting Learner's Daily Entry for a date, replacing what the entry for that date said before. */
+export class InvalidDailyEntryError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidDailyEntryError";
+  }
+}
+
+/** The date is after the Learner's today: a Daily Entry records what already happened. */
+export class FutureDailyEntryError extends Error {
+  constructor(readonly date: CalendarDate) {
+    super(`Can't write a Daily Entry for ${date}: it hasn't happened yet`);
+    this.name = "FutureDailyEntryError";
+  }
+}
+
+/** Whether `date` is a real calendar date written as `YYYY-MM-DD`. */
+export function isCalendarDate(date: string): date is CalendarDate {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  const parsed = new Date(`${date}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date;
+}
+
+/** Today's date in the acting Learner's own timezone. */
+export async function getToday(ctx: LearnerContext): Promise<CalendarDate> {
+  const { timezone } = await getLearner(ctx);
+  // en-CA formats dates as YYYY-MM-DD.
+  return new Intl.DateTimeFormat("en-CA", { timeZone: timezone, dateStyle: "short" }).format(ctx.clock.now());
+}
+
+/**
+ * Writes the acting Learner's Daily Entry for a date, today or earlier, replacing what the entry for that
+ * date said before: there is at most one per date.
+ */
 export async function saveDailyEntry(ctx: LearnerContext, input: DailyEntryInput): Promise<DailyEntry> {
+  if (!isCalendarDate(input.date)) throw new InvalidDailyEntryError(`Not a calendar date: ${input.date}`);
+  // YYYY-MM-DD strings sort chronologically.
+  if (input.date > (await getToday(ctx))) throw new FutureDailyEntryError(input.date);
+
   await ctx.db.transaction(async (tx) => {
     const [row] = await tx
       .insert(dailyEntry)
@@ -50,6 +87,7 @@ export async function saveDailyEntry(ctx: LearnerContext, input: DailyEntryInput
 
 /** The acting Learner's Daily Entry for a date, or null if they wrote none. */
 export async function getDailyEntry(ctx: LearnerContext, date: CalendarDate): Promise<DailyEntry | null> {
+  if (!isCalendarDate(date)) return null;
   const [entry] = await loadDailyEntries(ctx, eq(dailyEntry.date, date));
   return entry ?? null;
 }

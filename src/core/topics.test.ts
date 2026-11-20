@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { createTopic, DuplicateTopicNameError, findTopics, getTopicPage, InvalidTopicError } from "@/core";
+import {
+  createTopic,
+  DuplicateTopicNameError,
+  findTopics,
+  getTopicPage,
+  InvalidTopicError,
+  topicId,
+  TopicNotFoundError,
+} from "@/core";
 import { useTestContext } from "@/test/core-harness";
 import { actingAsNewLearner } from "@/test/learners";
 
@@ -12,6 +20,29 @@ describe("Topics", () => {
 
     const page = await getTopicPage(ada, topic.id);
     expect(page.topic).toMatchObject({ name: "Caching", description: "HTTP and application caches" });
+  });
+
+  describe("Topic page", () => {
+    it("starts with an empty timeline", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      const topic = await createTopic(ada, { name: "Caching" });
+      expect((await getTopicPage(ada, topic.id)).timeline).toEqual([]);
+    });
+
+    it("is not found for another Learner's Topic", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      const grace = await actingAsNewLearner(core.ctx);
+      const topic = await createTopic(ada, { name: "Caching" });
+      await expect(getTopicPage(grace, topic.id)).rejects.toBeInstanceOf(TopicNotFoundError);
+    });
+
+    it("is not found for an id that doesn't name a Topic", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      await expect(getTopicPage(ada, topicId("00000000-0000-4000-8000-000000000000"))).rejects.toBeInstanceOf(
+        TopicNotFoundError,
+      );
+      await expect(getTopicPage(ada, topicId("not-a-uuid"))).rejects.toBeInstanceOf(TopicNotFoundError);
+    });
   });
 
   it("needs only a name; surrounding whitespace is dropped", async () => {

@@ -21,11 +21,14 @@ export {
   findTopics,
   getTopicPage,
   InvalidTopicError,
+  topicId,
+  TopicNotFoundError,
   type NewTopic,
   type Topic,
   type TopicId,
   type TopicPage,
   type TopicSearch,
+  type TopicTimelineEntry,
 } from "./topics";
 
 // Infrastructure for adapters, scripts and the test harness

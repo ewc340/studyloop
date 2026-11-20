@@ -5,6 +5,10 @@ import { topic } from "./db/schema";
 /** Identifies a Topic. Branded so other ids can't be passed where a Topic is meant. */
 export type TopicId = string & { readonly __brand: "TopicId" };
 
+export function topicId(id: string): TopicId {
+  return id as TopicId;
+}
+
 export interface Topic {
   id: TopicId;
   name: string;
@@ -16,8 +20,25 @@ export interface NewTopic {
   description?: string | null;
 }
 
+/**
+ * One record on a Topic's timeline: a union with one variant per record type tagged with the Topic
+ * (Daily Entries, Resources, Gaps, Struggle Reflections, Study Items), each shaped
+ * `{ kind: "<record type>"; occurredAt: Date; ... }`. No record type can be tagged yet, so it has no variants.
+ */
+export type TopicTimelineEntry = never;
+
 export interface TopicPage {
   topic: Topic;
+  /** Everything tagged with the Topic, oldest first. */
+  timeline: TopicTimelineEntry[];
+}
+
+/** No Topic with this id belongs to the acting Learner. */
+export class TopicNotFoundError extends Error {
+  constructor(id: string) {
+    super(`Topic ${id} not found`);
+    this.name = "TopicNotFoundError";
+  }
 }
 
 export class InvalidTopicError extends Error {
@@ -86,11 +107,37 @@ function escapeLikePattern(text: string): string {
   return text.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
-/** The acting Learner's Topic page. */
+/**
+ * Gathers one record type's timeline entries for a Topic, already scoped to the acting Learner.
+ * Each record type that can be tagged with a Topic adds its variant to TopicTimelineEntry and its
+ * source to `timelineSources`.
+ */
+type TimelineSource = (ctx: LearnerContext, id: TopicId) => Promise<TopicTimelineEntry[]>;
+
+const timelineSources: TimelineSource[] = [];
+
+/** What every TopicTimelineEntry variant has in common. */
+interface TimelineEntryShape {
+  kind: string;
+  occurredAt: Date;
+}
+
+function byOccurredAt(a: TimelineEntryShape, b: TimelineEntryShape): number {
+  return a.occurredAt.getTime() - b.occurredAt.getTime();
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The acting Learner's Topic page: the Topic and its timeline, oldest first. */
 export async function getTopicPage(ctx: LearnerContext, id: TopicId): Promise<TopicPage> {
+  if (!UUID.test(id)) throw new TopicNotFoundError(id);
   const [row] = await ctx.db
     .select(topicColumns)
     .from(topic)
     .where(and(eq(topic.id, id), eq(topic.userId, ctx.learnerId)));
-  return { topic: toTopic(row) };
+  if (!row) throw new TopicNotFoundError(id);
+
+  const entries = await Promise.all(timelineSources.map((source) => source(ctx, id)));
+  const timeline = entries.flat().sort(byOccurredAt);
+  return { topic: toTopic(row), timeline };
 }

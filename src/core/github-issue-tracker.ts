@@ -22,7 +22,7 @@ export function githubIssueTracker(options: GitHubIssueTrackerOptions): IssueTra
 
   async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
     const response = await send(method, path, body);
-    if (!response.ok) throw failureFor(response);
+    if (!response.ok) throw await failureFor(response);
     return (await response.json()) as T;
   }
 
@@ -48,7 +48,7 @@ export function githubIssueTracker(options: GitHubIssueTrackerOptions): IssueTra
   async function ensureAssetsBranch(): Promise<void> {
     const existing = await send("GET", `/git/ref/heads/${assetsBranch}`);
     if (existing.ok) return;
-    if (existing.status !== 404) throw failureFor(existing);
+    if (existing.status !== 404) throw await failureFor(existing);
 
     const tree = await request<{ sha: string }>("POST", "/git/trees", {
       tree: [{ path: "README.md", mode: "100644", type: "blob", content: ASSETS_README }],
@@ -88,6 +88,17 @@ const ASSETS_README = `# feedback-assets
 Images attached to issues reported from the studyloop app. Unrelated to the code on main; never merge it.
 `;
 
-function failureFor(response: Response): IssueTrackerError {
-  return new IssueTrackerError("unavailable", { cause: `GitHub answered ${response.status}` });
+/** Why GitHub refused, from its documented status codes and rate-limit headers. */
+async function failureFor(response: Response): Promise<IssueTrackerError> {
+  const message = await response.text().catch(() => "");
+  const cause = `GitHub answered ${response.status}: ${message}`;
+  const rateLimited =
+    response.status === 429 ||
+    (response.status === 403 &&
+      (response.headers.get("x-ratelimit-remaining") === "0" || /rate limit/i.test(message)));
+  if (rateLimited) return new IssueTrackerError("rate-limited", { cause });
+  if (response.status === 401) return new IssueTrackerError("unauthorized", { cause });
+  // A fine-grained token without access to the repository sees it as missing.
+  if (response.status === 403 || response.status === 404) return new IssueTrackerError("forbidden", { cause });
+  return new IssueTrackerError("unavailable", { cause });
 }

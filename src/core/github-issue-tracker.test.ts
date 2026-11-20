@@ -93,4 +93,36 @@ describe("GitHub issue tracker", () => {
     expect(ref).toHaveLength(1);
     expect(ref[0].body).toEqual({ ref: "refs/heads/feedback-assets", sha: "commit1" });
   });
+
+  describe("says why GitHub refused", () => {
+    const cases: [string, Reply, IssueTrackerError["reason"]][] = [
+      ["a bad or expired token", { status: 401, body: { message: "Bad credentials" } }, "unauthorized"],
+      [
+        "an exhausted rate limit",
+        { status: 403, body: { message: "API rate limit exceeded" }, headers: { "x-ratelimit-remaining": "0" } },
+        "rate-limited",
+      ],
+      ["a secondary rate limit", { status: 429, body: { message: "secondary rate limit" } }, "rate-limited"],
+      ["a token without permission", { status: 403, body: { message: "Resource not accessible" } }, "forbidden"],
+      ["a token without access to the repository", { status: 404, body: { message: "Not Found" } }, "forbidden"],
+      ["a GitHub outage", { status: 502, body: { message: "Bad Gateway" } }, "unavailable"],
+      ["no network", new TypeError("fetch failed"), "unavailable"],
+    ];
+    it.each(cases)("%s", async (_, reply, reason) => {
+      const github = fakeGitHub({ [`POST ${REPO}/issues`]: reply });
+      await expect(trackerFor(github).createIssue({ title: "T", body: "B", labels: [] })).rejects.toMatchObject({
+        name: "IssueTrackerError",
+        reason,
+      });
+    });
+
+    it("when uploading an image too", async () => {
+      const github = fakeGitHub({
+        [`GET ${REPO}/git/ref/heads/feedback-assets`]: { status: 401, body: { message: "Bad credentials" } },
+      });
+      const upload = trackerFor(github).uploadImage({ path: "a.png", contentType: "image/png", bytes: new Uint8Array() });
+      await expect(upload).rejects.toThrow(IssueTrackerError);
+      await expect(upload).rejects.toMatchObject({ reason: "unauthorized" });
+    });
+  });
 });

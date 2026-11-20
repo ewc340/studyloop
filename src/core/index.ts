@@ -31,6 +31,15 @@ export {
   type TopicSearch,
   type TopicTimelineEntry,
 } from "./topics";
+export {
+  getDailyEntry,
+  saveDailyEntry,
+  type CalendarDate,
+  type Confidence,
+  type DailyEntry,
+  type DailyEntryInput,
+  type DailyEntryTopic,
+} from "./daily-entries";
 
 // Owner tooling: issue reporting (not part of the learning domain)
 export {

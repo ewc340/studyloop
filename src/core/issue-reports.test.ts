@@ -15,16 +15,10 @@ import {
 import { useTestContext } from "@/test/core-harness";
 import { actingAsNewLearner } from "@/test/learners";
 
-const core = useTestContext();
-
 const OWNER_EMAIL = "owner@example.test";
 
 function reportingWith(tracker = inMemoryIssueTracker()): IssueReporting {
   return { tracker, ownerEmail: OWNER_EMAIL, appVersion: "abc1234" };
-}
-
-function actingAsOwner() {
-  return actingAsNewLearner(core.ctx, { id: "owner", email: OWNER_EMAIL });
 }
 
 const phonePage = {
@@ -50,6 +44,12 @@ function bugReport(overrides: Partial<IssueReport> = {}): IssueReport {
 }
 
 describe("reporting an issue", () => {
+  const core = useTestContext();
+
+  function actingAsOwner() {
+    return actingAsNewLearner(core.ctx, { id: "owner", email: OWNER_EMAIL });
+  }
+
   it("the owner's bug report becomes a GitHub issue labelled for triage", async () => {
     const tracker = inMemoryIssueTracker();
     const owner = await actingAsOwner();

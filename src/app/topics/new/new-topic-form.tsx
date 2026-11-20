@@ -22,6 +22,7 @@ export function NewTopicForm() {
           required
           autoComplete="off"
           defaultValue={state.name}
+          data-private
           aria-invalid={state.error ? true : undefined}
           aria-describedby={state.error ? "topic-error" : undefined}
           className={inputClass}
@@ -36,6 +37,7 @@ export function NewTopicForm() {
           name="description"
           rows={3}
           defaultValue={state.description}
+          data-private
           className={inputClass}
         />
       </div>

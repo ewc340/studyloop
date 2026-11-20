@@ -12,7 +12,7 @@ async function SignedInHome() {
     <>
       <div className="flex items-center justify-between gap-4">
         <p data-testid="signed-in-as" className="text-sm text-zinc-700 dark:text-zinc-300">
-          Signed in as {learner.name}
+          Signed in as <span data-private>{learner.name}</span>
         </p>
         <SignOutButton />
         <TimezoneSync current={learner.timezone} />

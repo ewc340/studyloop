@@ -7,6 +7,12 @@ const nextConfig: NextConfig = {
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
   // Keep agent screenshots clean.
   devIndicators: process.env.E2E_AUTH_BYPASS === "1" ? false : undefined,
+  experimental: {
+    serverActions: {
+      // Issue reports carry images: up to 6 of 5 MB each (ISSUE_REPORT_LIMITS), plus form overhead.
+      bodySizeLimit: "32mb",
+    },
+  },
 };
 
 export default nextConfig;

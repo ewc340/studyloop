@@ -20,9 +20,13 @@ async function TopicDetails({ params }: { params: PageProps<"/topics/[id]">["par
   return (
     <>
       <header data-testid="topic-header" className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight break-words">{topic.name}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight break-words">
+          <span data-private>{topic.name}</span>
+        </h1>
         {topic.description && (
-          <p className="whitespace-pre-line text-zinc-700 dark:text-zinc-300">{topic.description}</p>
+          <p data-private className="whitespace-pre-line text-zinc-700 dark:text-zinc-300">
+            {topic.description}
+          </p>
         )}
       </header>
       <TopicTimeline entries={timeline} />

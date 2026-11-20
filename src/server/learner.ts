@@ -8,6 +8,13 @@ import { bypassLearnerIdFrom } from "./test-auth-bypass";
 
 /** The signed-in Learner's context, or a redirect to sign-in. */
 export async function requireLearnerContext(): Promise<LearnerContext> {
+  const ctx = await currentLearnerContext();
+  if (!ctx) redirect("/sign-in");
+  return ctx;
+}
+
+/** The signed-in Learner's context, or null when nobody is signed in (e.g. on the sign-in page). */
+export async function currentLearnerContext(): Promise<LearnerContext | null> {
   const requestHeaders = await headers();
 
   const bypassId = bypassLearnerIdFrom(requestHeaders);
@@ -16,6 +23,5 @@ export async function requireLearnerContext(): Promise<LearnerContext> {
   }
 
   const session = await auth.api.getSession({ headers: requestHeaders });
-  if (!session) redirect("/sign-in");
-  return { ...coreContext(), learnerId: learnerId(session.user.id) };
+  return session ? { ...coreContext(), learnerId: learnerId(session.user.id) } : null;
 }

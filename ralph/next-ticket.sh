@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Prints the AFK loop's next move as one line:
 #   RESUME <n>   our unfinished ticket: assigned to us, still open, and no PR of ours is out of draft
-#   START <n>    the lowest-numbered open, unassigned, unblocked ready-for-agent ticket
+#   START <n>    the next open, unassigned, unblocked ready-for-agent ticket: those labelled
+#                `priority` first, then lowest number
 #   NONE         nothing to do
 # Tickets are the sub-issues of the spec issue (SPEC_ISSUE, default 1). The spec itself and anything
 # labelled ready-for-human are never picked. A ticket whose PR is ready for review is finished from
@@ -16,7 +17,8 @@ candidates="$(gh api --paginate "repos/$REPO/issues/$SPEC_ISSUE/sub_issues?per_p
   --jq '.[] | select(.state == "open")
         | select(any(.labels[]; .name == "ready-for-agent"))
         | select(all(.labels[]; .name != "ready-for-human"))
-        | "\(.number) \([.assignees[].login] | join(","))"' | sort -n)"
+        | "\(if any(.labels[]; .name == "priority") then 0 else 1 end) \(.number) \([.assignees[].login] | join(","))"' \
+  | sort -k1,1n -k2,2n | cut -d' ' -f2-)"
 
 # Ticket numbers that already have a ready-for-review PR from a claude/<n>-* branch.
 handed_over="$(gh pr list --state open --limit 100 --json headRefName,isDraft \

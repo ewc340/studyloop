@@ -31,6 +31,11 @@ jobs:
       DATABASE_URL: postgres://studyloop:studyloop@localhost:5432/studyloop
       TEST_DATABASE_URL: postgres://studyloop:studyloop@localhost:5432/postgres
       E2E_DATABASE_URL: postgres://studyloop:studyloop@localhost:5432/studyloop_e2e
+      # CI-only placeholders: e2e signs in through the test bypass, never GitHub.
+      BETTER_AUTH_SECRET: ci-only-not-a-real-secret-0123456789abcdef
+      BETTER_AUTH_URL: http://localhost:3100
+      GITHUB_CLIENT_ID: ci-placeholder
+      GITHUB_CLIENT_SECRET: ci-placeholder
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7

@@ -19,6 +19,11 @@ describe("issue reporting configuration", () => {
     expect(issueReportingFrom({ ...configured, ISSUE_REPORTING_OWNER_EMAIL: undefined })).toBeNull();
   });
 
+  it("names the pull request in a PR's QA instance", () => {
+    expect(issueReportingFrom({ ...configured, QA_PR: "31" })?.pullRequest).toBe(31);
+    expect(issueReportingFrom(configured)?.pullRequest).toBeUndefined();
+  });
+
   it("can post to another repository", () => {
     expect(issueReportingFrom({ ...configured, ISSUE_REPORTING_REPOSITORY: "me/fork" })?.repository).toBe("me/fork");
   });

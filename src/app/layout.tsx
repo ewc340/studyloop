@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Suspense } from "react";
 import "./globals.css";
+import { BuildBadge } from "./build-badge";
 import { IssueReportControl } from "./issue-report/issue-report-control";
 
 const geistSans = Geist({
@@ -29,6 +30,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         {children}
         <Suspense fallback={null}>
           <IssueReportControl />
+        </Suspense>
+        <Suspense fallback={null}>
+          <BuildBadge />
         </Suspense>
       </body>
     </html>

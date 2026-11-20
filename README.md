@@ -22,8 +22,12 @@ npm run dev            # starts Postgres, applies migrations, starts Next.js on 
 ```sh
 npm test               # core tests against a throwaway Postgres database
 npm run e2e            # Playwright, phone viewport, against a dedicated e2e database
-npm run check          # lint + typecheck + tests + e2e + build (what CI runs)
+npm run check          # lint + typecheck + tests + hook tests + e2e + build (what CI runs)
 ```
+
+## AFK loop
+
+Tickets labelled `ready-for-agent` can be implemented unattended: `./ralph/once.sh` (watch one), `./ralph/afk.sh 3` (headless), or a nightly cloud routine. See [ralph/README.md](./ralph/README.md).
 
 ## Architecture
 

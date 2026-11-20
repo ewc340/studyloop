@@ -5,6 +5,8 @@ const nextConfig: NextConfig = {
   partialPrefetching: true,
   // Playwright runs its own dev server in a separate build folder, so it can run alongside `npm run dev`.
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
+  // Keep agent screenshots clean.
+  devIndicators: process.env.E2E_AUTH_BYPASS === "1" ? false : undefined,
 };
 
 export default nextConfig;

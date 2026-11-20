@@ -32,6 +32,8 @@ export {
   type TopicTimelineEntry,
 } from "./topics";
 
+export { githubIssueTracker, type GitHubIssueTrackerOptions } from "./github-issue-tracker";
+
 // Infrastructure for adapters, scripts and the test harness
 export { connect, databaseUrl, type Db, type DbHandle } from "./db/client";
 export { runMigrations } from "./db/migrate";

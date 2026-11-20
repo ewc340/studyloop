@@ -7,15 +7,10 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { chromium, devices } from "@playwright/test";
-import { localDatabaseUrls } from "../src/core";
+import { e2eServerEnv, loadCheckoutEnv } from "../e2e/server-env";
 import { E2E_LEARNER_HEADER } from "../src/server/test-auth-bypass";
 
-// Per-checkout settings such as E2E_DATABASE_URL live in .env; existing environment variables win.
-try {
-  process.loadEnvFile(".env");
-} catch {
-  // No .env: defaults apply.
-}
+loadCheckoutEnv();
 
 const PORT = 3100;
 const BASE = `http://localhost:${PORT}`;
@@ -29,17 +24,7 @@ async function isUp(): Promise<boolean> {
 }
 
 async function startServer(): Promise<ChildProcess> {
-  const env = {
-    ...process.env,
-    DATABASE_URL: process.env.E2E_DATABASE_URL ?? localDatabaseUrls.e2e,
-    E2E_AUTH_BYPASS: "1",
-    BETTER_AUTH_URL: BASE,
-    NEXT_DIST_DIR: ".next-e2e",
-    // Issue reporting for the e2e owner, against an in-memory tracker instead of GitHub.
-    ISSUE_REPORTING_GITHUB_TOKEN: "e2e-not-a-token",
-    ISSUE_REPORTING_OWNER_EMAIL: "e2e-owner@e2e.test",
-    ISSUE_REPORTING_FAKE_TRACKER: "1",
-  };
+  const env = { ...process.env, ...e2eServerEnv(PORT) };
   const server = spawn("sh", ["-c", `npx tsx scripts/prepare-e2e-db.ts && npx next dev --port ${PORT}`], {
     env,
     stdio: "ignore",

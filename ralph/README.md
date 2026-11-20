@@ -8,7 +8,7 @@ An agent picks the next unblocked `ready-for-agent` ticket (a sub-issue of spec 
 | `next-ticket.sh` | Deterministically picks the work: `RESUME <n>` (ours, assigned, PR still draft), `START <n>` (unblocked, unassigned; `priority`-labelled first, then lowest number), or `NONE`. Never the spec or `ready-for-human`. |
 | `screenshots.ts` | Agent QA: phone-sized screenshots of changed pages into `docs/screenshots/<n>/`, embedded in the PR. |
 | `sync-main.sh` | Puts the checkout on the latest `origin/main` (detached) before every run, so a stale branch can't mean a stale prompt or picker. Refuses if tracked files have uncommitted changes. |
-| `setup.sh` | Prepares a checkout: Node 24, `npm ci`, a placeholder `.env` if none exists (with this checkout's own `<folder>_dev` / `<folder>_e2e` databases), the shared Postgres server, Playwright. |
+| `setup.sh` | Prepares a checkout: Node 24, `npm ci`, a placeholder `.env` if none exists (with this checkout's own `wt_<folder>_dev` / `wt_<folder>_e2e` databases), the shared Postgres server, Playwright. All checkouts share one Postgres server: `npm run db:down` anywhere stops it for all, and `down -v` wipes everyone's data. |
 | `once.sh` | One ticket, **interactive** — watch it and step in. |
 | `afk.sh [n]` | Up to `n` tickets (default 3), **headless**, live progress in the terminal, transcripts in `ralph/logs/`. Stops on `NO_WORK`, `BLOCKED`, `SETUP_FAILED`, or an unfinished run. |
 | `format-stream.jq` | Renders the headless stream as a readable log. |

@@ -35,7 +35,9 @@ fi
 # never touches the owner's dev data or another checkout's e2e data.
 if [ ! -f .env ]; then
   log "Creating .env with test-only placeholders"
-  checkout="$(basename "$PWD" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9\n' '_')"
+  # wt_ prefix: always a valid, unquoted Postgres name (never starts with a digit, never "studyloop");
+  # capped so "<name>_dev"/"<name>_e2e" stay under Postgres's 63-character limit.
+  checkout="wt_$(basename "$PWD" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9\n' '_' | cut -c1-40)"
   cp .env.example .env
   sed -i.bak \
     -e "s|^DATABASE_URL=.*|DATABASE_URL=postgres://studyloop:studyloop@localhost:5432/${checkout}_dev|" \
@@ -59,8 +61,8 @@ if ! docker info >/dev/null 2>&1; then
 fi
 log "Starting Postgres (shared by all checkouts)"
 npm run db:up
-# No migrate here: core tests create their own databases, e2e prepares its own, and dev servers
-# apply migrations on start.
+# No migrate here: core tests create their own databases, e2e prepares its own, and `npm run dev`
+# creates and migrates this checkout's dev database on start.
 
 # --- Playwright browser
 log "Installing Playwright Chromium"

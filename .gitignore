@@ -34,3 +34,6 @@ npm-debug.log*
 
 # python
 __pycache__/
+
+# Per-PR QA instances (npm run qa): state and server logs
+/.qa/

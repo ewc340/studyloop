@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import type { LearnerContext } from "./context";
 import { dailyEntry, dailyEntryTopic, topic } from "./db/schema";
 import { topicId, type Topic, type TopicId } from "./topics";
@@ -50,25 +50,49 @@ export async function saveDailyEntry(ctx: LearnerContext, input: DailyEntryInput
 
 /** The acting Learner's Daily Entry for a date, or null if they wrote none. */
 export async function getDailyEntry(ctx: LearnerContext, date: CalendarDate): Promise<DailyEntry | null> {
-  const [entry] = await ctx.db
+  const [entry] = await loadDailyEntries(ctx, eq(dailyEntry.date, date));
+  return entry ?? null;
+}
+
+/** The acting Learner's Daily Entries, newest date first. */
+export function listDailyEntries(ctx: LearnerContext): Promise<DailyEntry[]> {
+  return loadDailyEntries(ctx);
+}
+
+async function loadDailyEntries(ctx: LearnerContext, where?: SQL): Promise<DailyEntry[]> {
+  const entries = await ctx.db
     .select({ id: dailyEntry.id, date: dailyEntry.date, body: dailyEntry.body })
     .from(dailyEntry)
-    .where(and(eq(dailyEntry.userId, ctx.learnerId), eq(dailyEntry.date, date)));
-  if (!entry) return null;
+    .where(and(eq(dailyEntry.userId, ctx.learnerId), where))
+    .orderBy(desc(dailyEntry.date));
+  if (entries.length === 0) return [];
 
   const tags = await ctx.db
-    .select({ id: topic.id, name: topic.name, description: topic.description, confidence: dailyEntryTopic.confidence })
+    .select({
+      dailyEntryId: dailyEntryTopic.dailyEntryId,
+      id: topic.id,
+      name: topic.name,
+      description: topic.description,
+      confidence: dailyEntryTopic.confidence,
+    })
     .from(dailyEntryTopic)
     .innerJoin(topic, eq(topic.id, dailyEntryTopic.topicId))
-    .where(eq(dailyEntryTopic.dailyEntryId, entry.id))
+    .where(
+      inArray(
+        dailyEntryTopic.dailyEntryId,
+        entries.map((e) => e.id),
+      ),
+    )
     .orderBy(asc(sql`lower(${topic.name})`), asc(topic.name));
 
-  return {
+  return entries.map((entry) => ({
     date: entry.date,
     body: entry.body,
-    topics: tags.map(({ confidence, ...t }) => ({
-      topic: { ...t, id: topicId(t.id) },
-      confidence: confidence as Confidence,
-    })),
-  };
+    topics: tags
+      .filter((t) => t.dailyEntryId === entry.id)
+      .map((t) => ({
+        topic: { id: topicId(t.id), name: t.name, description: t.description },
+        confidence: t.confidence as Confidence,
+      })),
+  }));
 }

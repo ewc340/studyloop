@@ -33,6 +33,7 @@ export {
 } from "./topics";
 export {
   getDailyEntry,
+  listDailyEntries,
   saveDailyEntry,
   type CalendarDate,
   type Confidence,

@@ -4,7 +4,7 @@ Read `CLAUDE.md`, `GLOSSARY.md` and `docs/agents/*.md` first and follow them exa
 
 ## 1. Prepare
 
-Run `bash ralph/setup.sh`. If it fails, stop and report the failure (see "Stopping").
+Run `bash ralph/sync-main.sh` (start from the latest `origin/main`), then `bash ralph/setup.sh`. If either fails, stop and report the failure (see "Stopping").
 
 ## 2. Pick exactly one ticket
 

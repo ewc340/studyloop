@@ -1,6 +1,7 @@
 import { and, asc, eq, ilike, sql } from "drizzle-orm";
 import type { LearnerContext } from "./context";
 import { topic } from "./db/schema";
+import { isUuid } from "./ids";
 
 /** Identifies a Topic. Branded so other ids can't be passed where a Topic is meant. */
 export type TopicId = string & { readonly __brand: "TopicId" };
@@ -149,11 +150,9 @@ function byOccurredAt(a: TimelineEntryShape, b: TimelineEntryShape): number {
   return a.occurredAt.getTime() - b.occurredAt.getTime();
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /** The acting Learner's Topic page: the Topic and its timeline, oldest first. */
 export async function getTopicPage(ctx: LearnerContext, id: TopicId): Promise<TopicPage> {
-  if (!UUID.test(id)) throw new TopicNotFoundError(id);
+  if (!isUuid(id)) throw new TopicNotFoundError(id);
   const [row] = await ctx.db
     .select(topicColumns)
     .from(topic)

@@ -1,5 +1,13 @@
 import { expect, test, type Page } from "@playwright/test";
 
+/**
+ * The visible form field with this label. Next keeps recently visited pages mounted but hidden, so a form
+ * seen earlier (e.g. New Company, before Edit Company) can still match the same label.
+ */
+function field(page: Page, label: string, exact = false) {
+  return page.getByLabel(label, { exact }).filter({ visible: true });
+}
+
 // A fresh Learner per test: tests share the e2e database, which also persists between local runs.
 test.beforeEach(async ({ context }, testInfo) => {
   await context.setExtraHTTPHeaders({
@@ -9,23 +17,23 @@ test.beforeEach(async ({ context }, testInfo) => {
 
 async function createCompany(page: Page, name: string, notes = "") {
   await page.goto("/companies/new");
-  await page.getByLabel("Name").fill(name);
-  await page.getByLabel("Notes").fill(notes);
+  await field(page, "Name").fill(name);
+  await field(page, "Notes").fill(notes);
   await page.getByRole("button", { name: "Create Company" }).click();
   await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
 }
 
 async function createApplication(page: Page, role: string, appliedOn: string) {
   await page.getByRole("link", { name: "New Application" }).click();
-  await page.getByLabel("Role").fill(role);
-  await page.getByLabel("Applied on").fill(appliedOn);
+  await field(page, "Role").fill(role);
+  await field(page, "Applied on").fill(appliedOn);
   await page.getByRole("button", { name: "Create Application" }).click();
   await expect(page.getByRole("heading", { level: 1, name: role })).toBeVisible();
 }
 
 async function changeStatus(page: Page, status: string, on: string) {
-  await page.getByLabel("New status").selectOption({ label: status });
-  await page.getByLabel("On", { exact: true }).fill(on);
+  await field(page, "New status").selectOption({ label: status });
+  await field(page, "On", true).fill(on);
   await page.getByRole("button", { name: "Record status change" }).click();
 }
 
@@ -36,22 +44,22 @@ test("a Learner records a Company and an Application, and follows its status cha
   await page.getByRole("link", { name: "Companies" }).click();
   await expect(page.getByText("No Companies yet.")).toBeVisible();
   await page.getByRole("link", { name: "New Company" }).click();
-  await page.getByLabel("Name").fill("Acme");
-  await page.getByLabel("Notes").fill("Recruiter reached out on LinkedIn");
+  await field(page, "Name").fill("Acme");
+  await field(page, "Notes").fill("Recruiter reached out on LinkedIn");
   await page.getByRole("button", { name: "Create Company" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Acme" })).toBeVisible();
 
   await page.getByRole("link", { name: "Edit" }).click();
-  await page.getByLabel("Name").fill("Acme Robotics");
+  await field(page, "Name").fill("Acme Robotics");
   await page.getByRole("button", { name: "Save Company" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Acme Robotics" })).toBeVisible();
   await expect(page.getByTestId("company-header")).toContainText("Recruiter reached out on LinkedIn");
 
   await page.getByRole("link", { name: "New Application" }).click();
-  await page.getByLabel("Role").fill("Backend Engineer");
-  await page.getByLabel("Applied on").fill("2025-11-01");
-  await page.getByLabel("Source").fill("Referral from Sam");
-  await page.getByLabel("Link").fill("https://jobs.example.test/acme/backend");
+  await field(page, "Role").fill("Backend Engineer");
+  await field(page, "Applied on").fill("2025-11-01");
+  await field(page, "Source").fill("Referral from Sam");
+  await field(page, "Link").fill("https://jobs.example.test/acme/backend");
   await page.getByRole("button", { name: "Create Application" }).click();
 
   await expect(page.getByRole("heading", { level: 1, name: "Backend Engineer" })).toBeVisible();
@@ -70,7 +78,7 @@ test("a Learner records a Company and an Application, and follows its status cha
   await expect(header).toContainText("Interviewing");
 
   await page.getByRole("link", { name: "Edit" }).click();
-  await page.getByLabel("Role").fill("Senior Backend Engineer");
+  await field(page, "Role").fill("Senior Backend Engineer");
   await page.getByRole("button", { name: "Save Application" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Senior Backend Engineer" })).toBeVisible();
   await expect(timeline).toHaveCount(3);

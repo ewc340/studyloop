@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { getTopicPage, topicId, TopicNotFoundError, type TopicPage } from "@/core";
+import { findTopics, getTopicPage, topicId, TopicNotFoundError, type TopicPage } from "@/core";
 import { requireLearnerContext } from "@/server/learner";
+import { TopicLinks } from "./topic-links";
 import { TopicTimeline } from "./topic-timeline";
 
 async function loadTopicPage(id: string): Promise<TopicPage> {
@@ -16,7 +17,10 @@ async function loadTopicPage(id: string): Promise<TopicPage> {
 
 async function TopicDetails({ params }: { params: PageProps<"/topics/[id]">["params"] }) {
   const { id } = await params;
-  const { topic, timeline } = await loadTopicPage(id);
+  const [{ topic, timeline, links }, topics] = await Promise.all([
+    loadTopicPage(id),
+    requireLearnerContext().then((ctx) => findTopics(ctx)),
+  ]);
   return (
     <>
       <header data-testid="topic-header" className="flex flex-col gap-1">
@@ -29,6 +33,7 @@ async function TopicDetails({ params }: { params: PageProps<"/topics/[id]">["par
           </p>
         )}
       </header>
+      <TopicLinks topic={topic} links={links} topics={topics} />
       <TopicTimeline entries={timeline} />
     </>
   );

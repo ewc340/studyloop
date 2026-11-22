@@ -1,6 +1,8 @@
 import { and, asc, eq, ilike, sql } from "drizzle-orm";
 import type { LearnerContext } from "./context";
+import type { Db, Tx } from "./db/client";
 import { topic } from "./db/schema";
+import { topicNeighbours, type TopicNeighbours } from "./topic-links";
 
 /** Identifies a Topic. Branded so other ids can't be passed where a Topic is meant. */
 export type TopicId = string & { readonly __brand: "TopicId" };
@@ -31,6 +33,8 @@ export interface TopicPage {
   topic: Topic;
   /** Everything tagged with the Topic, oldest first. */
   timeline: TopicTimelineEntry[];
+  /** The Topics linked to this one, grouped by link type and direction. */
+  links: TopicNeighbours;
 }
 
 /** No Topic with this id belongs to the acting Learner. */
@@ -56,9 +60,9 @@ export class DuplicateTopicNameError extends Error {
   }
 }
 
-const topicColumns = { id: topic.id, name: topic.name, description: topic.description };
+export const topicColumns = { id: topic.id, name: topic.name, description: topic.description };
 
-function toTopic(row: { id: string; name: string; description: string | null }): Topic {
+export function toTopic(row: { id: string; name: string; description: string | null }): Topic {
   return { ...row, id: topicId(row.id) };
 }
 
@@ -151,16 +155,29 @@ function byOccurredAt(a: TimelineEntryShape, b: TimelineEntryShape): number {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** The acting Learner's Topic page: the Topic and its timeline, oldest first. */
+/** Whether the id could name a row at all; Postgres rejects a malformed uuid instead of finding nothing. */
+export function isUuid(id: string): boolean {
+  return UUID.test(id);
+}
+
+/** The acting Learner's Topic page: the Topic, its timeline (oldest first) and its linked Topics. */
 export async function getTopicPage(ctx: LearnerContext, id: TopicId): Promise<TopicPage> {
-  if (!UUID.test(id)) throw new TopicNotFoundError(id);
-  const [row] = await ctx.db
+  const topic = await learnerTopic(ctx.db, ctx, id);
+  const [entries, links] = await Promise.all([
+    Promise.all(timelineSources.map((source) => source(ctx, topic.id))),
+    topicNeighbours(ctx, topic.id),
+  ]);
+  const timeline = entries.flat().sort(byOccurredAt);
+  return { topic, timeline, links };
+}
+
+/** The acting Learner's Topic with this id, read through `db` or a transaction. Throws TopicNotFoundError if they have none. */
+export async function learnerTopic(db: Db | Tx, ctx: LearnerContext, id: TopicId): Promise<Topic> {
+  if (!isUuid(id)) throw new TopicNotFoundError(id);
+  const [row] = await db
     .select(topicColumns)
     .from(topic)
     .where(and(eq(topic.id, id), eq(topic.userId, ctx.learnerId)));
   if (!row) throw new TopicNotFoundError(id);
-
-  const entries = await Promise.all(timelineSources.map((source) => source(ctx, id)));
-  const timeline = entries.flat().sort(byOccurredAt);
-  return { topic: toTopic(row), timeline };
+  return toTopic(row);
 }

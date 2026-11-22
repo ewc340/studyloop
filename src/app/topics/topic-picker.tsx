@@ -15,6 +15,8 @@ export interface TopicPickerProps {
   label?: string;
   /** When set, each selected Topic's id is submitted with the enclosing form under this field name. */
   name?: string;
+  /** Picks one Topic instead of several: picking another replaces it, and the suggestions close. */
+  single?: boolean;
 }
 
 type Option = { type: "topic"; topic: Topic } | { type: "create"; name: string };
@@ -23,7 +25,7 @@ type Option = { type: "topic"; topic: Topic } | { type: "create"; name: string }
  * Picks Topics for tagging: type to find existing Topics, or create a new one inline so tagging never
  * blocks logging. Picking a name the Learner already uses selects that Topic instead of failing.
  */
-export function TopicPicker({ topics, value, onChange, label = "Topics", name }: TopicPickerProps) {
+export function TopicPicker({ topics, value, onChange, label = "Topics", name, single = false }: TopicPickerProps) {
   const id = useId();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -49,7 +51,13 @@ export function TopicPicker({ topics, value, onChange, label = "Topics", name }:
   const active = Math.min(activeIndex, options.length - 1);
 
   function select(topic: Topic) {
-    if (!selectedIds.has(topic.id)) onChange([...value, topic]);
+    if (single) {
+      onChange([topic]);
+      // Uncover whatever follows the picker (e.g. the form's submit button).
+      setOpen(false);
+    } else if (!selectedIds.has(topic.id)) {
+      onChange([...value, topic]);
+    }
     setQuery("");
     setActiveIndex(0);
     setError(null);

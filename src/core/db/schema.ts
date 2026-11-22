@@ -1,6 +1,6 @@
 // Drizzle table definitions. Auth tables follow Better Auth's core schema; the `user` row is the Learner.
 import { sql } from "drizzle-orm";
-import { boolean, index, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, check, index, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -84,4 +84,36 @@ export const topic = pgTable(
     ...timestamps,
   },
   (t) => [uniqueIndex("topic_user_id_name_key").on(t.userId, sql`lower(${t.name})`)],
+);
+
+export const topicLinkTypes = ["prerequisite_of", "part_of", "related_to"] as const;
+
+/**
+ * A Topic Link: `from` is a prerequisite of / part of / related to `to`. A related-to link is stored
+ * with the smaller id first, so the same pair can't be related twice in opposite directions.
+ */
+export const topicLink = pgTable(
+  "topic_link",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    fromTopicId: uuid("from_topic_id")
+      .notNull()
+      .references(() => topic.id, { onDelete: "cascade" }),
+    toTopicId: uuid("to_topic_id")
+      .notNull()
+      .references(() => topic.id, { onDelete: "cascade" }),
+    type: text("type", { enum: topicLinkTypes }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("topic_link_from_to_type_key").on(t.fromTopicId, t.toTopicId, t.type),
+    index("topic_link_to_topic_id_idx").on(t.toTopicId),
+    index("topic_link_user_id_idx").on(t.userId),
+    check("topic_link_not_self", sql`${t.fromTopicId} <> ${t.toTopicId}`),
+    check("topic_link_type_check", sql`${t.type} in ('prerequisite_of', 'part_of', 'related_to')`),
+    check("topic_link_related_ordered", sql`${t.type} <> 'related_to' or ${t.fromTopicId} < ${t.toTopicId}`),
+  ],
 );

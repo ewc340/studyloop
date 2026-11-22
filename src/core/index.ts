@@ -31,6 +31,21 @@ export {
   type TopicSearch,
   type TopicTimelineEntry,
 } from "./topics";
+export {
+  DuplicateTopicLinkError,
+  InvalidTopicLinkError,
+  linkTopics,
+  TopicLinkCycleError,
+  topicLinkId,
+  TopicLinkNotFoundError,
+  unlinkTopics,
+  type NewTopicLink,
+  type TopicLink,
+  type TopicLinkId,
+  type TopicLinkType,
+  type TopicNeighbour,
+  type TopicNeighbours,
+} from "./topic-links";
 
 // Owner tooling: issue reporting (not part of the learning domain)
 export {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  changeApplicationStatus,
   companyId,
   CompanyNotFoundError,
   createApplication,
@@ -103,6 +104,39 @@ describe("Job search", () => {
         timeline: [{ status: "applied", changedOn: "2025-12-20" }],
       });
       expect((await getCompany(ada, acme.id)).applications).toEqual([expected]);
+    });
+
+    describe("status changes", () => {
+      it("are recorded with dates; the timeline shows them in date order, the latest being the current status", async () => {
+        const ada = await actingAsNewLearner(core.ctx);
+        const acme = await createCompany(ada, { name: "Acme Robotics" });
+        const { id } = await createApplication(ada, acme.id, { role: "Backend Engineer", appliedOn: "2025-12-01" });
+
+        await changeApplicationStatus(ada, id, { status: "interviewing", changedOn: "2025-12-15" });
+        // Backfilled: the screening call was forgotten at the time.
+        await changeApplicationStatus(ada, id, { status: "screening", changedOn: "2025-12-05" });
+
+        const page = await getApplication(ada, id);
+        expect(page.timeline).toEqual([
+          { status: "applied", changedOn: "2025-12-01" },
+          { status: "screening", changedOn: "2025-12-05" },
+          { status: "interviewing", changedOn: "2025-12-15" },
+        ]);
+        expect(page.application).toMatchObject({ status: "interviewing", statusChangedOn: "2025-12-15" });
+      });
+
+      it("on the same date keep the order they were recorded in", async () => {
+        const ada = await actingAsNewLearner(core.ctx);
+        const acme = await createCompany(ada, { name: "Acme Robotics" });
+        const { id } = await createApplication(ada, acme.id, { role: "Backend Engineer", appliedOn: "2025-12-01" });
+
+        await changeApplicationStatus(ada, id, { status: "offer", changedOn: "2025-12-20" });
+        await changeApplicationStatus(ada, id, { status: "withdrawn", changedOn: "2025-12-20" });
+
+        const page = await getApplication(ada, id);
+        expect(page.timeline.map((c) => c.status)).toEqual(["applied", "offer", "withdrawn"]);
+        expect(page.application.status).toBe("withdrawn");
+      });
     });
   });
 });

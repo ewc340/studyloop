@@ -35,6 +35,7 @@ export {
   APPLICATION_STATUSES,
   applicationId,
   ApplicationNotFoundError,
+  changeApplicationStatus,
   companyId,
   CompanyNotFoundError,
   createApplication,
@@ -55,6 +56,7 @@ export {
   type CompanyId,
   type CompanyPage,
   type LocalDate,
+  type NewApplicationStatus,
 } from "./job-search";
 
 // Owner tooling: issue reporting (not part of the learning domain)

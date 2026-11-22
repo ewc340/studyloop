@@ -181,6 +181,27 @@ export async function createApplication(
   return (await applicationPage(ctx, applicationId(row.id))).application;
 }
 
+export interface NewApplicationStatus {
+  status: ApplicationStatus;
+  changedOn: LocalDate;
+}
+
+/** Records that the acting Learner's Application took a status on a date, and returns its updated page. */
+export async function changeApplicationStatus(
+  ctx: LearnerContext,
+  id: ApplicationId,
+  change: NewApplicationStatus,
+): Promise<ApplicationPage> {
+  await applicationPage(ctx, id);
+  await ctx.db.insert(applicationStatusChange).values({
+    userId: ctx.learnerId,
+    applicationId: id,
+    status: change.status,
+    changedOn: change.changedOn,
+  });
+  return applicationPage(ctx, id);
+}
+
 /** The acting Learner's Application and its timeline. */
 export async function getApplication(ctx: LearnerContext, id: ApplicationId): Promise<ApplicationPage> {
   return applicationPage(ctx, id);

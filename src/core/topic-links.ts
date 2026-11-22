@@ -44,11 +44,20 @@ export interface TopicNeighbours {
 
 /** Links two of the acting Learner's Topics: `from` becomes a prerequisite of / part of / related to `to`. */
 export async function linkTopics(ctx: LearnerContext, input: NewTopicLink): Promise<TopicLink> {
+  const [fromTopicId, toTopicId] = storedOrder(input);
   const [row] = await ctx.db
     .insert(topicLink)
-    .values({ userId: ctx.learnerId, fromTopicId: input.from, toTopicId: input.to, type: input.type })
+    .values({ userId: ctx.learnerId, fromTopicId, toTopicId, type: input.type })
     .returning();
   return toTopicLink(row);
+}
+
+/**
+ * A related-to link has no direction, so it's stored smaller id first (lowercase UUID strings sort
+ * the way Postgres orders uuids). Other links are stored as given.
+ */
+function storedOrder({ from, type, to }: NewTopicLink): [TopicId, TopicId] {
+  return type === "related_to" && to < from ? [to, from] : [from, to];
 }
 
 function toTopicLink(row: typeof topicLink.$inferSelect): TopicLink {

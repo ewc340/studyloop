@@ -7,10 +7,13 @@ import { StatusBadge } from "./status";
 export function ApplicationList({
   applications,
   showCompany = true,
+  showStatus = true,
   testId,
 }: {
   applications: Application[];
   showCompany?: boolean;
+  /** Off where the list sits under its status's heading. */
+  showStatus?: boolean;
   testId?: string;
 }) {
   return (
@@ -31,7 +34,7 @@ export function ApplicationList({
                 since {formatLocalDate(application.statusChangedOn)}
               </span>
             </span>
-            <StatusBadge status={application.status} />
+            {showStatus && <StatusBadge status={application.status} />}
           </Link>
         </li>
       ))}

@@ -84,7 +84,7 @@ async function Applications({ searchParams }: { searchParams: PageProps<"/applic
             <h2 id={`status-${s}`} className="text-lg font-semibold">
               {STATUS_LABELS[s]}
             </h2>
-            <ApplicationList applications={byStatus.get(s)!} testId={`applications-${s}`} />
+            <ApplicationList applications={byStatus.get(s)!} showStatus={false} testId={`applications-${s}`} />
           </section>
         ))
       )}

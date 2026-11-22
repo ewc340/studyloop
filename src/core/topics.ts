@@ -154,9 +154,14 @@ function byOccurredAt(a: TimelineEntryShape, b: TimelineEntryShape): number {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** Whether the id could name a row at all; Postgres rejects a malformed uuid instead of finding nothing. */
+export function isUuid(id: string): boolean {
+  return UUID.test(id);
+}
+
 /** The acting Learner's Topic page: the Topic, its timeline (oldest first) and its linked Topics. */
 export async function getTopicPage(ctx: LearnerContext, id: TopicId): Promise<TopicPage> {
-  if (!UUID.test(id)) throw new TopicNotFoundError(id);
+  if (!isUuid(id)) throw new TopicNotFoundError(id);
   const [row] = await ctx.db
     .select(topicColumns)
     .from(topic)

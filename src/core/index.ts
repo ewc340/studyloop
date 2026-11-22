@@ -32,6 +32,8 @@ export {
   type TopicTimelineEntry,
 } from "./topics";
 export {
+  DuplicateTopicLinkError,
+  InvalidTopicLinkError,
   linkTopics,
   type NewTopicLink,
   type TopicLink,

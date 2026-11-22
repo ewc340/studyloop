@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { createTopic, getTopicPage, linkTopics, type LearnerContext } from "@/core";
+import {
+  createTopic,
+  DuplicateTopicLinkError,
+  getTopicPage,
+  InvalidTopicLinkError,
+  linkTopics,
+  topicId,
+  TopicNotFoundError,
+  type LearnerContext,
+  type TopicLinkType,
+} from "@/core";
 import { useTestContext } from "@/test/core-harness";
 import { actingAsNewLearner } from "@/test/learners";
 
@@ -77,6 +87,76 @@ describe("Topic Links", () => {
       parts: ["redis"],
       parents: ["System design"],
       related: ["CDN", "Memoisation"],
+    });
+  });
+
+  describe("rejected links", () => {
+    it("rejects linking a Topic to itself", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      const [caching] = await topics(ada, "Caching");
+
+      for (const type of ["prerequisite_of", "part_of", "related_to"] as const) {
+        const attempt = linkTopics(ada, { from: caching.id, type, to: caching.id });
+        await expect(attempt).rejects.toBeInstanceOf(InvalidTopicLinkError);
+        await expect(attempt).rejects.toThrow("A Topic can't be linked to itself");
+      }
+    });
+
+    it("rejects a link that already exists, with a message naming it", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      const [http, caching] = await topics(ada, "HTTP", "Caching");
+      await linkTopics(ada, { from: http.id, type: "prerequisite_of", to: caching.id });
+      await linkTopics(ada, { from: http.id, type: "part_of", to: caching.id });
+
+      const prerequisite = linkTopics(ada, { from: http.id, type: "prerequisite_of", to: caching.id });
+      await expect(prerequisite).rejects.toBeInstanceOf(DuplicateTopicLinkError);
+      await expect(prerequisite).rejects.toThrow('"HTTP" is already a prerequisite of "Caching"');
+      await expect(linkTopics(ada, { from: http.id, type: "part_of", to: caching.id })).rejects.toThrow(
+        '"HTTP" is already part of "Caching"',
+      );
+    });
+
+    it("rejects relating two Topics that are already related, whichever way round", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      const [caching, cdn] = await topics(ada, "Caching", "CDN");
+      await linkTopics(ada, { from: caching.id, type: "related_to", to: cdn.id });
+
+      for (const [from, to] of [
+        [caching, cdn],
+        [cdn, caching],
+      ]) {
+        const attempt = linkTopics(ada, { from: from.id, type: "related_to", to: to.id });
+        await expect(attempt).rejects.toBeInstanceOf(DuplicateTopicLinkError);
+        await expect(attempt).rejects.toThrow(`"${from.name}" is already related to "${to.name}"`);
+      }
+      expect(names((await getTopicPage(ada, caching.id)).links.related)).toEqual(["CDN"]);
+    });
+
+    it("rejects linking another Learner's Topic, or one that doesn't exist", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      const grace = await actingAsNewLearner(core.ctx);
+      const [caching] = await topics(ada, "Caching");
+      const [http] = await topics(grace, "HTTP");
+
+      await expect(linkTopics(ada, { from: http.id, type: "prerequisite_of", to: caching.id })).rejects.toBeInstanceOf(
+        TopicNotFoundError,
+      );
+      await expect(linkTopics(ada, { from: caching.id, type: "related_to", to: http.id })).rejects.toBeInstanceOf(
+        TopicNotFoundError,
+      );
+      await expect(
+        linkTopics(ada, { from: caching.id, type: "related_to", to: topicId("not-a-uuid") }),
+      ).rejects.toBeInstanceOf(TopicNotFoundError);
+      expect((await getTopicPage(grace, http.id)).links.related).toEqual([]);
+    });
+
+    it("rejects an unknown link type", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      const [http, caching] = await topics(ada, "HTTP", "Caching");
+      const type = "depends_on" as TopicLinkType;
+      await expect(linkTopics(ada, { from: http.id, type, to: caching.id })).rejects.toBeInstanceOf(
+        InvalidTopicLinkError,
+      );
     });
   });
 });

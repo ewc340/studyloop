@@ -31,6 +31,16 @@ export {
   type TopicSearch,
   type TopicTimelineEntry,
 } from "./topics";
+export {
+  companyId,
+  CompanyNotFoundError,
+  createCompany,
+  getCompany,
+  type Company,
+  type CompanyDetails,
+  type CompanyId,
+  type CompanyPage,
+} from "./job-search";
 
 // Owner tooling: issue reporting (not part of the learning domain)
 export {

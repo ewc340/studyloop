@@ -4,12 +4,14 @@
 export { learnerId, type CoreContext, type LearnerContext, type LearnerId } from "./context";
 export { systemClock, type Clock } from "./clock";
 
+export { type LocalDate } from "./local-date";
 // Operations
 export { getHealth, type Health } from "./health";
 export {
   ensureLearner,
   getLearner,
   setLearnerTimezone,
+  learnerToday,
   InvalidTimezoneError,
   LearnerNotFoundError,
   type Learner,
@@ -44,6 +46,7 @@ export {
   findApplications,
   findCompanies,
   getCompany,
+  InvalidApplicationError,
   InvalidCompanyError,
   updateCompany,
   type Application,
@@ -57,7 +60,6 @@ export {
   type CompanyDetails,
   type CompanyId,
   type CompanyPage,
-  type LocalDate,
   type NewApplicationStatus,
 } from "./job-search";
 

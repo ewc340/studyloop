@@ -3,6 +3,8 @@ import { and, asc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import type { LearnerContext } from "./context";
 import { application, applicationStatus, applicationStatusChange, company } from "./db/schema";
 import { isUuid } from "./ids";
+import { learnerToday } from "./learner";
+import { isLocalDate, type LocalDate } from "./local-date";
 
 /** Identifies a Company. Branded so other ids can't be passed where a Company is meant. */
 export type CompanyId = string & { readonly __brand: "CompanyId" };
@@ -115,9 +117,6 @@ export const APPLICATION_STATUSES = applicationStatus.enumValues;
 
 export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
 
-/** A calendar date in the Learner's own timezone, as `YYYY-MM-DD`. */
-export type LocalDate = string;
-
 export interface Application {
   id: ApplicationId;
   company: Pick<Company, "id" | "name">;
@@ -160,6 +159,42 @@ export class ApplicationNotFoundError extends Error {
   }
 }
 
+export class InvalidApplicationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidApplicationError";
+  }
+}
+
+async function applicationValues(ctx: LearnerContext, input: ApplicationDetails) {
+  const role = input.role.trim();
+  if (!role) throw new InvalidApplicationError("An Application needs a role");
+  const link = input.link?.trim() || null;
+  if (link && !isWebAddress(link)) throw new InvalidApplicationError("The link must be a web address (http or https)");
+  return {
+    role,
+    appliedOn: await pastOrToday(ctx, input.appliedOn, "The applied date"),
+    source: input.source?.trim() || null,
+    link,
+  };
+}
+
+function isWebAddress(text: string): boolean {
+  try {
+    const { protocol } = new URL(text);
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+/** `date` if it's a date no later than today in the Learner's timezone. */
+async function pastOrToday(ctx: LearnerContext, date: string, what: string): Promise<LocalDate> {
+  if (!isLocalDate(date)) throw new InvalidApplicationError(`${what} must be a date (YYYY-MM-DD)`);
+  if (date > (await learnerToday(ctx))) throw new InvalidApplicationError(`${what} can't be after today`);
+  return date;
+}
+
 /** Records an Application under the acting Learner's Company. It starts applied, on its applied date. */
 export async function createApplication(
   ctx: LearnerContext,
@@ -169,14 +204,7 @@ export async function createApplication(
   const owner = await companyRow(ctx, companyId);
   const [row] = await ctx.db
     .insert(application)
-    .values({
-      userId: ctx.learnerId,
-      companyId: owner.id,
-      role: input.role,
-      appliedOn: input.appliedOn,
-      source: input.source,
-      link: input.link,
-    })
+    .values({ userId: ctx.learnerId, companyId: owner.id, ...(await applicationValues(ctx, input)) })
     .returning({ id: application.id });
   return (await applicationPage(ctx, applicationId(row.id))).application;
 }

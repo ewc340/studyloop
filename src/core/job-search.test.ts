@@ -9,7 +9,10 @@ import {
   findCompanies,
   getApplication,
   getCompany,
+  InvalidApplicationError,
   InvalidCompanyError,
+  learnerToday,
+  setLearnerTimezone,
   updateCompany,
 } from "@/core";
 import { useTestContext } from "@/test/core-harness";
@@ -105,6 +108,70 @@ describe("Job search", () => {
         timeline: [{ status: "applied", changedOn: "2025-12-20" }],
       });
       expect((await getCompany(ada, acme.id)).applications).toEqual([expected]);
+    });
+
+    describe("details", () => {
+      it("drop surrounding whitespace; blank source and link are left out", async () => {
+        const ada = await actingAsNewLearner(core.ctx);
+        const acme = await createCompany(ada, { name: "Acme Robotics" });
+        const application = await createApplication(ada, acme.id, {
+          role: "  Backend Engineer ",
+          appliedOn: "2025-12-20",
+          source: "  ",
+          link: " ",
+        });
+        expect(application).toMatchObject({ role: "Backend Engineer", source: null, link: null });
+      });
+
+      it("need a role", async () => {
+        const ada = await actingAsNewLearner(core.ctx);
+        const acme = await createCompany(ada, { name: "Acme Robotics" });
+        await expect(createApplication(ada, acme.id, { role: " ", appliedOn: "2025-12-20" })).rejects.toThrow(
+          new InvalidApplicationError("An Application needs a role"),
+        );
+      });
+
+      it("take a link only if it's a web address", async () => {
+        const ada = await actingAsNewLearner(core.ctx);
+        const acme = await createCompany(ada, { name: "Acme Robotics" });
+        for (const link of ["jobs.example.test/backend", "javascript:alert(1)", "ftp://example.test/job"]) {
+          await expect(
+            createApplication(ada, acme.id, { role: "Backend Engineer", appliedOn: "2025-12-20", link }),
+          ).rejects.toBeInstanceOf(InvalidApplicationError);
+        }
+        const application = await createApplication(ada, acme.id, {
+          role: "Backend Engineer",
+          appliedOn: "2025-12-20",
+          link: " http://jobs.example.test/backend ",
+        });
+        expect(application.link).toBe("http://jobs.example.test/backend");
+      });
+
+      it("take an applied date up to today in the Learner's timezone, but not after", async () => {
+        // 2026-01-01T12:00Z is already 2 January in Auckland.
+        core.clock.set("2026-01-01T12:00:00Z");
+        const ada = await actingAsNewLearner(core.ctx);
+        await setLearnerTimezone(ada, "Pacific/Auckland");
+        const acme = await createCompany(ada, { name: "Acme Robotics" });
+
+        expect(await learnerToday(ada)).toBe("2026-01-02");
+        await expect(
+          createApplication(ada, acme.id, { role: "Backend Engineer", appliedOn: "2026-01-02" }),
+        ).resolves.toMatchObject({ appliedOn: "2026-01-02" });
+        await expect(
+          createApplication(ada, acme.id, { role: "Backend Engineer", appliedOn: "2026-01-03" }),
+        ).rejects.toThrow(new InvalidApplicationError("The applied date can't be after today"));
+      });
+
+      it("reject an applied date that isn't a date", async () => {
+        const ada = await actingAsNewLearner(core.ctx);
+        const acme = await createCompany(ada, { name: "Acme Robotics" });
+        for (const appliedOn of ["", "yesterday", "2025-02-30", "2025-1-5"]) {
+          await expect(createApplication(ada, acme.id, { role: "Backend Engineer", appliedOn })).rejects.toBeInstanceOf(
+            InvalidApplicationError,
+          );
+        }
+      });
     });
 
     describe("status changes", () => {

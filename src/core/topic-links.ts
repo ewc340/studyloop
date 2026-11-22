@@ -59,6 +59,23 @@ export class DuplicateTopicLinkError extends Error {
   }
 }
 
+/**
+ * Prerequisite-of and part-of links may not form cycles: `to` already leads back to `from`.
+ * `cycle` runs from `from` round to `from` again, e.g. Caching → HTTP → TCP → Caching.
+ */
+export class TopicLinkCycleError extends Error {
+  readonly cycle: Topic[];
+
+  constructor(from: Topic, type: TopicLinkType, to: Topic, pathBack: Topic[]) {
+    const cycle = [from, ...pathBack];
+    super(
+      `"${from.name}" can't be ${describe(type)} "${to.name}": that would form a cycle (${cycle.map((t) => t.name).join(" → ")})`,
+    );
+    this.name = "TopicLinkCycleError";
+    this.cycle = cycle;
+  }
+}
+
 function describe(type: TopicLinkType): string {
   return { prerequisite_of: "a prerequisite of", part_of: "part of", related_to: "related to" }[type];
 }
@@ -81,6 +98,11 @@ export async function linkTopics(ctx: LearnerContext, input: NewTopicLink): Prom
     const to = await learnerTopic(tx, ctx, input.to);
     if (from.id === to.id) throw new InvalidTopicLinkError("A Topic can't be linked to itself");
 
+    if (input.type !== "related_to") {
+      const path = await shortestPath(tx, ctx, input.type, to.id, from.id);
+      if (path) throw new TopicLinkCycleError(from, input.type, to, await topicsByIds(tx, ctx, path));
+    }
+
     const [fromTopicId, toTopicId] = storedOrder(from.id, input.type, to.id);
     const [row] = await tx
       .insert(topicLink)
@@ -90,6 +112,53 @@ export async function linkTopics(ctx: LearnerContext, input: NewTopicLink): Prom
     if (!row) throw new DuplicateTopicLinkError(from, input.type, to);
     return toTopicLink(row);
   });
+}
+
+/**
+ * The fewest links of this type leading from `start` to `goal`, as the Topic ids along the way
+ * (both ends included), or null if there's no such path. Each Learner's Topic graph is small, so
+ * their links of this type are searched in memory.
+ */
+async function shortestPath(
+  tx: Tx,
+  ctx: LearnerContext,
+  type: TopicLinkType,
+  start: TopicId,
+  goal: TopicId,
+): Promise<TopicId[] | null> {
+  const links = await tx
+    .select({ from: topicLink.fromTopicId, to: topicLink.toTopicId })
+    .from(topicLink)
+    .where(and(eq(topicLink.userId, ctx.learnerId), eq(topicLink.type, type)));
+  const next = new Map<string, string[]>();
+  for (const link of links) next.set(link.from, [...(next.get(link.from) ?? []), link.to]);
+
+  const cameFrom = new Map<string, string | null>([[start, null]]);
+  const queue: string[] = [start];
+  for (let i = 0; i < queue.length; i++) {
+    const current = queue[i];
+    if (current === goal) {
+      const path: TopicId[] = [];
+      for (let at: string | null = current; at !== null; at = cameFrom.get(at) ?? null) path.unshift(at as TopicId);
+      return path;
+    }
+    for (const neighbour of next.get(current) ?? []) {
+      if (cameFrom.has(neighbour)) continue;
+      cameFrom.set(neighbour, current);
+      queue.push(neighbour);
+    }
+  }
+  return null;
+}
+
+/** The Learner's Topics with these ids, in the same order. */
+async function topicsByIds(tx: Tx, ctx: LearnerContext, ids: TopicId[]): Promise<Topic[]> {
+  const rows = await tx
+    .select(topicColumns)
+    .from(topic)
+    .where(and(eq(topic.userId, ctx.learnerId), inArray(topic.id, ids)));
+  const byId = new Map(rows.map((row) => [row.id, toTopic(row)]));
+  return ids.flatMap((id) => byId.get(id) ?? []);
 }
 
 async function learnerTopic(tx: Tx, ctx: LearnerContext, id: TopicId): Promise<Topic> {

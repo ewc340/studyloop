@@ -35,6 +35,7 @@ export {
   DuplicateTopicLinkError,
   InvalidTopicLinkError,
   linkTopics,
+  TopicLinkCycleError,
   type NewTopicLink,
   type TopicLink,
   type TopicLinkId,

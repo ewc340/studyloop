@@ -4,11 +4,7 @@ import { findApplications, type Application, type ApplicationStatus } from "@/co
 import { requireLearnerContext } from "@/server/learner";
 import { backLinkClass } from "../ui";
 import { ApplicationList } from "./application-list";
-import { STATUS_LABELS, STATUSES } from "./status";
-
-function isStatus(text: unknown): text is ApplicationStatus {
-  return typeof text === "string" && (STATUSES as string[]).includes(text);
-}
+import { isStatus, STATUS_LABELS, STATUSES } from "./status";
 
 const chipClass = "inline-block rounded-full border px-3 py-1.5 text-sm font-medium whitespace-nowrap";
 const chipSelected = "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900";
@@ -45,17 +41,14 @@ function StatusFilter({ selected, counts }: { selected?: ApplicationStatus; coun
 async function Applications({ searchParams }: { searchParams: PageProps<"/applications">["searchParams"] }) {
   const { status } = await searchParams;
   const selected = isStatus(status) ? status : undefined;
-  const ctx = await requireLearnerContext();
-  const [all, filtered] = await Promise.all([
-    findApplications(ctx),
-    selected ? findApplications(ctx, { status: selected }) : undefined,
-  ]);
+  const all = await findApplications(await requireLearnerContext());
 
   const byStatus = new Map<ApplicationStatus, Application[]>();
   for (const application of all) {
     byStatus.set(application.status, [...(byStatus.get(application.status) ?? []), application]);
   }
   const counts = new Map([...byStatus].map(([s, applications]) => [s, applications.length]));
+  const filtered = selected && (byStatus.get(selected) ?? []);
 
   if (all.length === 0) {
     return (

@@ -13,6 +13,10 @@ export const STATUS_LABELS: Record<ApplicationStatus, string> = {
 /** Every status in pipeline order (the labels' order). Usable in client components, unlike the core's list. */
 export const STATUSES = Object.keys(STATUS_LABELS) as ApplicationStatus[];
 
+export function isStatus(text: unknown): text is ApplicationStatus {
+  return typeof text === "string" && (STATUSES as string[]).includes(text);
+}
+
 const badgeColors: Record<ApplicationStatus, string> = {
   applied: "bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200",
   screening: "bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-200",

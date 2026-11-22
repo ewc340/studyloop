@@ -227,6 +227,24 @@ describe("Job search", () => {
         ).resolves.toMatchObject({ application: { status: "screening" } });
       });
 
+      it("must change the status the Application has on that date", async () => {
+        const ada = await actingAsNewLearner(core.ctx);
+        const acme = await createCompany(ada, { name: "Acme Robotics" });
+        const { id } = await createApplication(ada, acme.id, { role: "Backend Engineer", appliedOn: "2025-12-01" });
+        await changeApplicationStatus(ada, id, { status: "screening", changedOn: "2025-12-05" });
+
+        await expect(changeApplicationStatus(ada, id, { status: "screening", changedOn: "2025-12-08" })).rejects.toThrow(
+          new InvalidApplicationError("The Application is already screening by then"),
+        );
+        await expect(changeApplicationStatus(ada, id, { status: "applied", changedOn: "2025-12-03" })).rejects.toThrow(
+          new InvalidApplicationError("The Application is already applied by then"),
+        );
+        // Backfilling a different status before an existing change is fine.
+        await expect(
+          changeApplicationStatus(ada, id, { status: "rejected", changedOn: "2025-12-03" }),
+        ).resolves.toMatchObject({ application: { status: "screening" } });
+      });
+
       it("only take known statuses", async () => {
         const ada = await actingAsNewLearner(core.ctx);
         const acme = await createCompany(ada, { name: "Acme Robotics" });

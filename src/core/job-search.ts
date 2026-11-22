@@ -139,7 +139,7 @@ export interface ApplicationDetails {
   link?: string | null;
 }
 
-/** One entry on an Application's timeline: it took this status on this date. */
+/** One entry on an Application's timeline, or a change to record: it took this status on this date. */
 export interface ApplicationStatusChange {
   status: ApplicationStatus;
   changedOn: LocalDate;
@@ -201,26 +201,21 @@ export async function createApplication(
   companyId: CompanyId,
   input: ApplicationDetails,
 ): Promise<Application> {
-  const owner = await companyRow(ctx, companyId);
+  const company = await companyRow(ctx, companyId);
   const [row] = await ctx.db
     .insert(application)
-    .values({ userId: ctx.learnerId, companyId: owner.id, ...(await applicationValues(ctx, input)) })
+    .values({ userId: ctx.learnerId, companyId: company.id, ...(await applicationValues(ctx, input)) })
     .returning({ id: application.id });
-  return (await applicationPage(ctx, applicationId(row.id))).application;
-}
-
-export interface NewApplicationStatus {
-  status: ApplicationStatus;
-  changedOn: LocalDate;
+  return (await getApplication(ctx, applicationId(row.id))).application;
 }
 
 /** Records that the acting Learner's Application took a status on a date, and returns its updated page. */
 export async function changeApplicationStatus(
   ctx: LearnerContext,
   id: ApplicationId,
-  change: NewApplicationStatus,
+  change: ApplicationStatusChange,
 ): Promise<ApplicationPage> {
-  const { application: current } = await applicationPage(ctx, id);
+  const { application: current, timeline } = await getApplication(ctx, id);
   if (!APPLICATION_STATUSES.includes(change.status)) {
     throw new InvalidApplicationError(`Not an Application status: ${change.status}`);
   }
@@ -228,10 +223,15 @@ export async function changeApplicationStatus(
   if (changedOn < current.appliedOn) {
     throw new InvalidApplicationError("A status change can't be dated before the applied date");
   }
+  // Changes on the same date as the new one come before it, since it's recorded after them.
+  const statusThen = timeline.filter((c) => c.changedOn <= changedOn).at(-1)!.status;
+  if (statusThen === change.status) {
+    throw new InvalidApplicationError(`The Application is already ${change.status} by then`);
+  }
   await ctx.db
     .insert(applicationStatusChange)
     .values({ userId: ctx.learnerId, applicationId: id, status: change.status, changedOn });
-  return applicationPage(ctx, id);
+  return getApplication(ctx, id);
 }
 
 /** Replaces the details of the acting Learner's Application; its status changes stay as they were. */
@@ -240,7 +240,7 @@ export async function updateApplication(
   id: ApplicationId,
   input: ApplicationDetails,
 ): Promise<Application> {
-  const { timeline } = await applicationPage(ctx, id);
+  const { timeline } = await getApplication(ctx, id);
   const values = await applicationValues(ctx, input);
   const firstChange = timeline[1];
   if (firstChange && values.appliedOn > firstChange.changedOn) {
@@ -250,7 +250,7 @@ export async function updateApplication(
     .update(application)
     .set(values)
     .where(and(eq(application.id, id), eq(application.userId, ctx.learnerId)));
-  return (await applicationPage(ctx, id)).application;
+  return (await getApplication(ctx, id)).application;
 }
 
 export interface ApplicationSearch {
@@ -266,10 +266,6 @@ export async function findApplications(ctx: LearnerContext, search: ApplicationS
 
 /** The acting Learner's Application and its timeline. */
 export async function getApplication(ctx: LearnerContext, id: ApplicationId): Promise<ApplicationPage> {
-  return applicationPage(ctx, id);
-}
-
-async function applicationPage(ctx: LearnerContext, id: ApplicationId): Promise<ApplicationPage> {
   if (!isUuid(id)) throw new ApplicationNotFoundError(id);
   const [page] = await loadApplications(ctx, eq(application.id, id));
   if (!page) throw new ApplicationNotFoundError(id);

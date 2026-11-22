@@ -2,7 +2,6 @@
 
 import { redirect } from "next/navigation";
 import {
-  APPLICATION_STATUSES,
   applicationId,
   ApplicationNotFoundError,
   changeApplicationStatus,
@@ -73,8 +72,11 @@ export async function submitStatusChange(
   const status = String(formData.get("status") ?? "");
   const changedOn = String(formData.get("changedOn") ?? "");
   try {
-    if (!isStatus(status)) throw new InvalidApplicationError("Choose a status");
-    await changeApplicationStatus(await requireLearnerContext(), applicationId(id), { status, changedOn });
+    // The core rejects anything that isn't an Application status.
+    await changeApplicationStatus(await requireLearnerContext(), applicationId(id), {
+      status: status as ApplicationStatus,
+      changedOn,
+    });
   } catch (error) {
     if (error instanceof InvalidApplicationError || error instanceof ApplicationNotFoundError) {
       return { error: error.message, status, changedOn };
@@ -82,8 +84,4 @@ export async function submitStatusChange(
     throw error;
   }
   redirect(`/applications/${id}`);
-}
-
-function isStatus(text: string): text is ApplicationStatus {
-  return (APPLICATION_STATUSES as readonly string[]).includes(text);
 }

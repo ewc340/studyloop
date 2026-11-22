@@ -61,7 +61,6 @@ export {
   type CompanyDetails,
   type CompanyId,
   type CompanyPage,
-  type NewApplicationStatus,
 } from "./job-search";
 
 // Owner tooling: issue reporting (not part of the learning domain)

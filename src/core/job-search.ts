@@ -220,14 +220,37 @@ export async function changeApplicationStatus(
   id: ApplicationId,
   change: NewApplicationStatus,
 ): Promise<ApplicationPage> {
-  await applicationPage(ctx, id);
-  await ctx.db.insert(applicationStatusChange).values({
-    userId: ctx.learnerId,
-    applicationId: id,
-    status: change.status,
-    changedOn: change.changedOn,
-  });
+  const { application: current } = await applicationPage(ctx, id);
+  if (!APPLICATION_STATUSES.includes(change.status)) {
+    throw new InvalidApplicationError(`Not an Application status: ${change.status}`);
+  }
+  const changedOn = await pastOrToday(ctx, change.changedOn, "The status change date");
+  if (changedOn < current.appliedOn) {
+    throw new InvalidApplicationError("A status change can't be dated before the applied date");
+  }
+  await ctx.db
+    .insert(applicationStatusChange)
+    .values({ userId: ctx.learnerId, applicationId: id, status: change.status, changedOn });
   return applicationPage(ctx, id);
+}
+
+/** Replaces the details of the acting Learner's Application; its status changes stay as they were. */
+export async function updateApplication(
+  ctx: LearnerContext,
+  id: ApplicationId,
+  input: ApplicationDetails,
+): Promise<Application> {
+  const { timeline } = await applicationPage(ctx, id);
+  const values = await applicationValues(ctx, input);
+  const firstChange = timeline[1];
+  if (firstChange && values.appliedOn > firstChange.changedOn) {
+    throw new InvalidApplicationError("The applied date can't be after the Application's first status change");
+  }
+  await ctx.db
+    .update(application)
+    .set(values)
+    .where(and(eq(application.id, id), eq(application.userId, ctx.learnerId)));
+  return (await applicationPage(ctx, id)).application;
 }
 
 export interface ApplicationSearch {

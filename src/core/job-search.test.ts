@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  applicationId,
+  ApplicationNotFoundError,
+  type ApplicationStatus,
   changeApplicationStatus,
   companyId,
   CompanyNotFoundError,
@@ -13,6 +16,7 @@ import {
   InvalidCompanyError,
   learnerToday,
   setLearnerTimezone,
+  updateApplication,
   updateCompany,
 } from "@/core";
 import { useTestContext } from "@/test/core-harness";
@@ -204,6 +208,109 @@ describe("Job search", () => {
         const page = await getApplication(ada, id);
         expect(page.timeline.map((c) => c.status)).toEqual(["applied", "offer", "withdrawn"]);
         expect(page.application.status).toBe("withdrawn");
+      });
+
+      it("can't be dated before the applied date or after today", async () => {
+        core.clock.set("2026-01-01T12:00:00Z");
+        const ada = await actingAsNewLearner(core.ctx);
+        const acme = await createCompany(ada, { name: "Acme Robotics" });
+        const { id } = await createApplication(ada, acme.id, { role: "Backend Engineer", appliedOn: "2025-12-01" });
+
+        await expect(changeApplicationStatus(ada, id, { status: "screening", changedOn: "2025-11-30" })).rejects.toThrow(
+          new InvalidApplicationError("A status change can't be dated before the applied date"),
+        );
+        await expect(changeApplicationStatus(ada, id, { status: "screening", changedOn: "2026-01-02" })).rejects.toThrow(
+          new InvalidApplicationError("The status change date can't be after today"),
+        );
+        await expect(
+          changeApplicationStatus(ada, id, { status: "screening", changedOn: "2025-12-01" }),
+        ).resolves.toMatchObject({ application: { status: "screening" } });
+      });
+
+      it("only take known statuses", async () => {
+        const ada = await actingAsNewLearner(core.ctx);
+        const acme = await createCompany(ada, { name: "Acme Robotics" });
+        const { id } = await createApplication(ada, acme.id, { role: "Backend Engineer", appliedOn: "2025-12-01" });
+        await expect(
+          changeApplicationStatus(ada, id, { status: "hired" as ApplicationStatus, changedOn: "2025-12-05" }),
+        ).rejects.toBeInstanceOf(InvalidApplicationError);
+      });
+    });
+
+    describe("editing", () => {
+      it("replaces an Application's details and keeps its status changes", async () => {
+        const ada = await actingAsNewLearner(core.ctx);
+        const acme = await createCompany(ada, { name: "Acme Robotics" });
+        const { id } = await createApplication(ada, acme.id, {
+          role: "Backend Engineer",
+          appliedOn: "2025-12-01",
+          source: "LinkedIn",
+          link: "https://jobs.example.test/1",
+        });
+        await changeApplicationStatus(ada, id, { status: "screening", changedOn: "2025-12-05" });
+
+        const edited = await updateApplication(ada, id, { role: "Senior Backend Engineer", appliedOn: "2025-11-28" });
+        expect(edited).toMatchObject({
+          role: "Senior Backend Engineer",
+          appliedOn: "2025-11-28",
+          source: null,
+          link: null,
+          status: "screening",
+        });
+        expect((await getApplication(ada, id)).timeline).toEqual([
+          { status: "applied", changedOn: "2025-11-28" },
+          { status: "screening", changedOn: "2025-12-05" },
+        ]);
+      });
+
+      it("can't move the applied date after a recorded status change", async () => {
+        const ada = await actingAsNewLearner(core.ctx);
+        const acme = await createCompany(ada, { name: "Acme Robotics" });
+        const { id } = await createApplication(ada, acme.id, { role: "Backend Engineer", appliedOn: "2025-12-01" });
+        await changeApplicationStatus(ada, id, { status: "screening", changedOn: "2025-12-05" });
+
+        await expect(updateApplication(ada, id, { role: "Backend Engineer", appliedOn: "2025-12-06" })).rejects.toThrow(
+          new InvalidApplicationError("The applied date can't be after the Application's first status change"),
+        );
+        await expect(
+          updateApplication(ada, id, { role: "Backend Engineer", appliedOn: "2025-12-05" }),
+        ).resolves.toMatchObject({ appliedOn: "2025-12-05" });
+      });
+    });
+
+    describe("belong to one Learner", () => {
+      it("so another Learner can't add one to the Learner's Company", async () => {
+        const ada = await actingAsNewLearner(core.ctx);
+        const grace = await actingAsNewLearner(core.ctx);
+        const acme = await createCompany(ada, { name: "Acme Robotics" });
+        await expect(
+          createApplication(grace, acme.id, { role: "Backend Engineer", appliedOn: "2025-12-01" }),
+        ).rejects.toBeInstanceOf(CompanyNotFoundError);
+        expect((await getCompany(ada, acme.id)).applications).toEqual([]);
+      });
+
+      it("so another Learner can't see, edit or change the status of one", async () => {
+        const ada = await actingAsNewLearner(core.ctx);
+        const grace = await actingAsNewLearner(core.ctx);
+        const acme = await createCompany(ada, { name: "Acme Robotics" });
+        const { id } = await createApplication(ada, acme.id, { role: "Backend Engineer", appliedOn: "2025-12-01" });
+
+        await expect(getApplication(grace, id)).rejects.toBeInstanceOf(ApplicationNotFoundError);
+        await expect(
+          updateApplication(grace, id, { role: "Mine now", appliedOn: "2025-12-01" }),
+        ).rejects.toBeInstanceOf(ApplicationNotFoundError);
+        await expect(
+          changeApplicationStatus(grace, id, { status: "rejected", changedOn: "2025-12-02" }),
+        ).rejects.toBeInstanceOf(ApplicationNotFoundError);
+        expect((await getApplication(ada, id)).application).toMatchObject({ role: "Backend Engineer", status: "applied" });
+      });
+
+      it("and an id that doesn't name one is not found", async () => {
+        const ada = await actingAsNewLearner(core.ctx);
+        await expect(getApplication(ada, applicationId("not-a-uuid"))).rejects.toBeInstanceOf(ApplicationNotFoundError);
+        await expect(
+          getApplication(ada, applicationId("00000000-0000-4000-8000-000000000000")),
+        ).rejects.toBeInstanceOf(ApplicationNotFoundError);
       });
     });
 

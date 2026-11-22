@@ -48,6 +48,7 @@ export {
   getCompany,
   InvalidApplicationError,
   InvalidCompanyError,
+  updateApplication,
   updateCompany,
   type Application,
   type ApplicationDetails,

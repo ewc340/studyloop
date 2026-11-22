@@ -5,6 +5,7 @@ import {
   CompanyNotFoundError,
   createApplication,
   createCompany,
+  findApplications,
   findCompanies,
   getApplication,
   getCompany,
@@ -136,6 +137,50 @@ describe("Job search", () => {
         const page = await getApplication(ada, id);
         expect(page.timeline.map((c) => c.status)).toEqual(["applied", "offer", "withdrawn"]);
         expect(page.application.status).toBe("withdrawn");
+      });
+    });
+
+    describe("listing by status", () => {
+      async function pipeline() {
+        const ada = await actingAsNewLearner(core.ctx);
+        const acme = await createCompany(ada, { name: "Acme Robotics" });
+        const globex = await createCompany(ada, { name: "Globex" });
+        const backend = await createApplication(ada, acme.id, { role: "Backend Engineer", appliedOn: "2025-12-01" });
+        const platform = await createApplication(ada, acme.id, { role: "Platform Engineer", appliedOn: "2025-12-03" });
+        const sre = await createApplication(ada, globex.id, { role: "SRE", appliedOn: "2025-12-02" });
+        await changeApplicationStatus(ada, backend.id, { status: "screening", changedOn: "2025-12-04" });
+        await changeApplicationStatus(ada, sre.id, { status: "screening", changedOn: "2025-12-06" });
+        await changeApplicationStatus(ada, sre.id, { status: "rejected", changedOn: "2025-12-10" });
+        return { ada, backend, platform, sre };
+      }
+
+      function roles(applications: { role: string }[]) {
+        return applications.map((a) => a.role);
+      }
+
+      it("lists all the Learner's Applications, most recent status change first", async () => {
+        const { ada } = await pipeline();
+        const applications = await findApplications(ada);
+        expect(applications.map((a) => [a.role, a.company.name, a.status])).toEqual([
+          ["SRE", "Globex", "rejected"],
+          ["Backend Engineer", "Acme Robotics", "screening"],
+          ["Platform Engineer", "Acme Robotics", "applied"],
+        ]);
+      });
+
+      it("filters by current status, not past ones", async () => {
+        const { ada } = await pipeline();
+        expect(roles(await findApplications(ada, { status: "screening" }))).toEqual(["Backend Engineer"]);
+        expect(roles(await findApplications(ada, { status: "rejected" }))).toEqual(["SRE"]);
+        expect(roles(await findApplications(ada, { status: "applied" }))).toEqual(["Platform Engineer"]);
+        expect(await findApplications(ada, { status: "offer" })).toEqual([]);
+      });
+
+      it("never lists another Learner's Applications", async () => {
+        await pipeline();
+        const grace = await actingAsNewLearner(core.ctx);
+        expect(await findApplications(grace)).toEqual([]);
+        expect(await findApplications(grace, { status: "screening" })).toEqual([]);
       });
     });
   });

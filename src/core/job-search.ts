@@ -202,6 +202,17 @@ export async function changeApplicationStatus(
   return applicationPage(ctx, id);
 }
 
+export interface ApplicationSearch {
+  /** Only Applications whose current status is this one. */
+  status?: ApplicationStatus;
+}
+
+/** The acting Learner's Applications, most recent status change first. */
+export async function findApplications(ctx: LearnerContext, search: ApplicationSearch = {}): Promise<Application[]> {
+  const pages = await loadApplications(ctx);
+  return pages.map((p) => p.application).filter((a) => !search.status || a.status === search.status);
+}
+
 /** The acting Learner's Application and its timeline. */
 export async function getApplication(ctx: LearnerContext, id: ApplicationId): Promise<ApplicationPage> {
   return applicationPage(ctx, id);
@@ -214,8 +225,12 @@ async function applicationPage(ctx: LearnerContext, id: ApplicationId): Promise<
   return page;
 }
 
-/** The acting Learner's Applications matching `where`, each with its timeline. */
-async function loadApplications(ctx: LearnerContext, where: SQL): Promise<ApplicationPage[]> {
+/**
+ * The acting Learner's Applications matching `where`, each with its timeline, most recent status change first.
+ * The current status is derived from the timeline, so filtering by it happens here rather than in SQL;
+ * one Learner's job search is small enough for that.
+ */
+async function loadApplications(ctx: LearnerContext, where?: SQL): Promise<ApplicationPage[]> {
   const rows = await ctx.db
     .select({
       id: application.id,
@@ -249,7 +264,7 @@ async function loadApplications(ctx: LearnerContext, where: SQL): Promise<Applic
     )
     .orderBy(asc(applicationStatusChange.changedOn), asc(applicationStatusChange.seq));
 
-  return rows.map((row) => {
+  const pages = rows.map((row) => {
     const timeline: ApplicationStatusChange[] = [
       { status: "applied", changedOn: row.appliedOn },
       ...changes
@@ -271,4 +286,14 @@ async function loadApplications(ctx: LearnerContext, where: SQL): Promise<Applic
       timeline,
     };
   });
+  return pages.sort((a, b) => byLatestStatusChange(a.application, b.application));
+}
+
+function byLatestStatusChange(a: Application, b: Application): number {
+  return (
+    b.statusChangedOn.localeCompare(a.statusChangedOn) ||
+    b.appliedOn.localeCompare(a.appliedOn) ||
+    a.company.name.localeCompare(b.company.name) ||
+    a.role.localeCompare(b.role)
+  );
 }

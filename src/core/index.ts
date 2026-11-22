@@ -4,12 +4,14 @@
 export { learnerId, type CoreContext, type LearnerContext, type LearnerId } from "./context";
 export { systemClock, type Clock } from "./clock";
 
+export { type LocalDate } from "./local-date";
 // Operations
 export { getHealth, type Health } from "./health";
 export {
   ensureLearner,
   getLearner,
   setLearnerTimezone,
+  learnerToday,
   InvalidTimezoneError,
   LearnerNotFoundError,
   type Learner,
@@ -31,6 +33,35 @@ export {
   type TopicSearch,
   type TopicTimelineEntry,
 } from "./topics";
+export {
+  APPLICATION_STATUSES,
+  applicationId,
+  ApplicationNotFoundError,
+  changeApplicationStatus,
+  companyId,
+  CompanyNotFoundError,
+  createApplication,
+  createCompany,
+  getApplication,
+  findApplications,
+  findCompanies,
+  getCompany,
+  InvalidApplicationError,
+  InvalidCompanyError,
+  updateApplication,
+  updateCompany,
+  type Application,
+  type ApplicationDetails,
+  type ApplicationId,
+  type ApplicationPage,
+  type ApplicationSearch,
+  type ApplicationStatus,
+  type ApplicationStatusChange,
+  type Company,
+  type CompanyDetails,
+  type CompanyId,
+  type CompanyPage,
+} from "./job-search";
 
 // Owner tooling: issue reporting (not part of the learning domain)
 export {

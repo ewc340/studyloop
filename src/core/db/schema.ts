@@ -1,6 +1,6 @@
 // Drizzle table definitions. Auth tables follow Better Auth's core schema; the `user` row is the Learner.
 import { sql } from "drizzle-orm";
-import { boolean, index, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, date, index, integer, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -84,4 +84,72 @@ export const topic = pgTable(
     ...timestamps,
   },
   (t) => [uniqueIndex("topic_user_id_name_key").on(t.userId, sql`lower(${t.name})`)],
+);
+
+
+/** A Company: an organization the Learner has engaged with as a potential employer. */
+export const company = pgTable(
+  "company",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    notes: text("notes"),
+    ...timestamps,
+  },
+  (t) => [index("company_user_id_idx").on(t.userId)],
+);
+
+/** An Application: the Learner's pursuit of one role at one Company. Its status lives in its status changes. */
+export const application = pgTable(
+  "application",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    companyId: uuid("company_id")
+      .notNull()
+      .references(() => company.id, { onDelete: "cascade" }),
+    role: text("role").notNull(),
+    /** The date the Learner applied, in their own timezone; the Application's status is applied from then. */
+    appliedOn: date("applied_on", { mode: "string" }).notNull(),
+    source: text("source"),
+    link: text("link"),
+    ...timestamps,
+  },
+  (t) => [index("application_user_id_idx").on(t.userId), index("application_company_id_idx").on(t.companyId)],
+);
+
+export const applicationStatus = pgEnum("application_status", [
+  "applied",
+  "screening",
+  "interviewing",
+  "offer",
+  "rejected",
+  "withdrawn",
+  "ghosted",
+]);
+
+/** A dated change of an Application's status, after it was applied for. */
+export const applicationStatusChange = pgTable(
+  "application_status_change",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Orders changes recorded for the same date. */
+    seq: integer("seq").generatedAlwaysAsIdentity().notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    applicationId: uuid("application_id")
+      .notNull()
+      .references(() => application.id, { onDelete: "cascade" }),
+    status: applicationStatus("status").notNull(),
+    /** The date the status changed, in the Learner's own timezone. */
+    changedOn: date("changed_on", { mode: "string" }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("application_status_change_application_id_idx").on(t.applicationId)],
 );

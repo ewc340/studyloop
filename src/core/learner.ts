@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { learnerId, type CoreContext, type LearnerContext, type LearnerId } from "./context";
 import { user } from "./db/schema";
+import { localDateAt, type LocalDate } from "./local-date";
 
 export interface Learner {
   id: LearnerId;
@@ -56,6 +57,12 @@ export interface NewLearner {
 export async function ensureLearner(ctx: CoreContext, learner: NewLearner): Promise<LearnerContext> {
   await ctx.db.insert(user).values(learner).onConflictDoNothing();
   return { ...ctx, learnerId: learnerId(learner.id) };
+}
+
+/** Today's date in the acting Learner's timezone. */
+export async function learnerToday(ctx: LearnerContext): Promise<LocalDate> {
+  const { timezone } = await getLearner(ctx);
+  return localDateAt(ctx.clock.now(), timezone);
 }
 
 function isValidTimezone(timezone: string): boolean {

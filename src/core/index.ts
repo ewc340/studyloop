@@ -32,17 +32,29 @@ export {
   type TopicTimelineEntry,
 } from "./topics";
 export {
+  APPLICATION_STATUSES,
+  applicationId,
+  ApplicationNotFoundError,
   companyId,
   CompanyNotFoundError,
+  createApplication,
   createCompany,
+  getApplication,
   findCompanies,
   getCompany,
   InvalidCompanyError,
   updateCompany,
+  type Application,
+  type ApplicationDetails,
+  type ApplicationId,
+  type ApplicationPage,
+  type ApplicationStatus,
+  type ApplicationStatusChange,
   type Company,
   type CompanyDetails,
   type CompanyId,
   type CompanyPage,
+  type LocalDate,
 } from "./job-search";
 
 // Owner tooling: issue reporting (not part of the learning domain)

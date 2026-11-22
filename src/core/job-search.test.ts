@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   companyId,
   CompanyNotFoundError,
+  createApplication,
   createCompany,
   findCompanies,
+  getApplication,
   getCompany,
   InvalidCompanyError,
   updateCompany,
@@ -70,6 +72,37 @@ describe("Job search", () => {
       await expect(updateCompany(ada, companyId("not-a-uuid"), { name: "Acme" })).rejects.toBeInstanceOf(
         CompanyNotFoundError,
       );
+    });
+  });
+
+  describe("Applications", () => {
+    it("records an Application under a Company, applied for on its applied date", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      const acme = await createCompany(ada, { name: "Acme Robotics" });
+
+      const application = await createApplication(ada, acme.id, {
+        role: "Backend Engineer",
+        appliedOn: "2025-12-20",
+        source: "Referral from Sam",
+        link: "https://jobs.example.test/acme/backend",
+      });
+
+      const expected = {
+        id: application.id,
+        company: { id: acme.id, name: "Acme Robotics" },
+        role: "Backend Engineer",
+        appliedOn: "2025-12-20",
+        source: "Referral from Sam",
+        link: "https://jobs.example.test/acme/backend",
+        status: "applied",
+        statusChangedOn: "2025-12-20",
+      };
+      expect(application).toEqual(expected);
+      expect(await getApplication(ada, application.id)).toEqual({
+        application: expected,
+        timeline: [{ status: "applied", changedOn: "2025-12-20" }],
+      });
+      expect((await getCompany(ada, acme.id)).applications).toEqual([expected]);
     });
   });
 });

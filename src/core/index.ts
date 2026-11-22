@@ -31,6 +31,15 @@ export {
   type TopicSearch,
   type TopicTimelineEntry,
 } from "./topics";
+export {
+  linkTopics,
+  type NewTopicLink,
+  type TopicLink,
+  type TopicLinkId,
+  type TopicLinkType,
+  type TopicNeighbour,
+  type TopicNeighbours,
+} from "./topic-links";
 
 // Owner tooling: issue reporting (not part of the learning domain)
 export {

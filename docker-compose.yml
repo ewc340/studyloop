@@ -1,4 +1,11 @@
 # Local development database. Production compose lives in its own file (see ticket #18).
+# One shared Postgres server for every checkout of this repo (main folder, worktrees, AFK runs):
+# without a fixed project name, Compose names it after the folder and a second checkout tries to
+# start a second server on the same port. Checkouts are isolated by database name instead.
+# Because it's shared, `npm run db:down` from any checkout stops it for all of them, and
+# `docker compose down -v` deletes everyone's data, including the owner's dev database.
+name: studyloop
+
 services:
   db:
     image: pgvector/pgvector:pg17

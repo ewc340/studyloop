@@ -36,6 +36,7 @@ for i in $(seq 1 "$MAX"); do
   case "$final" in
     DONE*) continue ;;
     NO_WORK*) echo "No unblocked ready-for-agent tickets left."; exit 0 ;;
+    SETUP_FAILED*) echo "Stopped: this machine isn't ready for a run (reason above). Nothing was claimed."; exit 1 ;;
     BLOCKED*) echo "Stopped: a ticket needs a human (see the issue comment)."; exit 0 ;;
     *) echo "Stopped: run ended without a final status line (limit reached or error). Check $log." ; exit 1 ;;
   esac

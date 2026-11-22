@@ -4,7 +4,7 @@ Read `CLAUDE.md`, `GLOSSARY.md` and `docs/agents/*.md` first and follow them exa
 
 ## 1. Prepare
 
-Run `bash ralph/sync-main.sh` (start from the latest `origin/main`), then `bash ralph/setup.sh`. If either fails, stop and report the failure (see "Stopping").
+Run `bash ralph/sync-main.sh` (start from the latest `origin/main`), then `bash ralph/setup.sh`. If either fails, don't work around it: report what failed and end your run with the final line `SETUP_FAILED <one-line reason>`. Never point anything at the owner's dev database (`studyloop`); this checkout's own databases are set in its `.env` by `setup.sh`.
 
 ## 2. Pick exactly one ticket
 
@@ -61,4 +61,4 @@ If the ticket is ambiguous, contradicts the spec or an ADR, or you are blocked a
 - Commit `.env`, real secrets, or real personal data.
 - Skip or weaken tests to make CI pass.
 
-Your final line must be exactly one of: `NO_WORK`, `DONE #<n> <pr-url>`, `BLOCKED #<n> <reason>`.
+Your final line must be exactly one of: `NO_WORK`, `DONE #<n> <pr-url>`, `BLOCKED #<n> <reason>`, `SETUP_FAILED <reason>`.

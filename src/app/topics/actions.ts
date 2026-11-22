@@ -64,18 +64,22 @@ export async function createTopicInline(name: string): Promise<InlineTopicResult
 
 /**
  * How the Topic whose page is shown relates to the Topic picked in the Add link form. "out" links
- * run from the shown Topic to the picked one, "in" links the other way.
+ * run from the shown Topic to the picked one, "in" links the other way. A related-to link has no
+ * direction, so it has one choice.
  */
-export type TopicLinkChoice = `${TopicLinkType}:${"out" | "in"}`;
+const linkChoices = {
+  "prerequisite_of:out": { type: "prerequisite_of", direction: "out" },
+  "prerequisite_of:in": { type: "prerequisite_of", direction: "in" },
+  "part_of:out": { type: "part_of", direction: "out" },
+  "part_of:in": { type: "part_of", direction: "in" },
+  "related_to": { type: "related_to", direction: "out" },
+} as const satisfies Record<string, { type: TopicLinkType; direction: "out" | "in" }>;
 
-const linkChoices: Record<TopicLinkChoice, true> = {
-  "prerequisite_of:out": true,
-  "prerequisite_of:in": true,
-  "part_of:out": true,
-  "part_of:in": true,
-  "related_to:out": true,
-  "related_to:in": true,
-};
+export type TopicLinkChoice = keyof typeof linkChoices;
+
+function isLinkChoice(value: string): value is TopicLinkChoice {
+  return Object.hasOwn(linkChoices, value);
+}
 
 export interface AddTopicLinkState {
   error?: string;
@@ -89,10 +93,10 @@ export async function addTopicLink(
 ): Promise<AddTopicLinkState> {
   const choice = String(formData.get("link") ?? "");
   const other = String(formData.get("topic") ?? "");
-  if (!(choice in linkChoices)) return { error: "Choose how the Topics are linked" };
+  if (!isLinkChoice(choice)) return { error: "Choose how the Topics are linked" };
   if (!other) return { error: "Choose a Topic to link" };
 
-  const [type, direction] = choice.split(":") as [TopicLinkType, "out" | "in"];
+  const { type, direction } = linkChoices[choice];
   const [from, to] = direction === "out" ? [shownTopicId, other] : [other, shownTopicId];
   try {
     await linkTopics(await requireLearnerContext(), {

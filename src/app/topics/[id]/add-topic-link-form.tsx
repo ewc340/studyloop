@@ -11,7 +11,7 @@ const choices: { value: TopicLinkChoice; label: string }[] = [
   { value: "prerequisite_of:out", label: "Is a prerequisite of" },
   { value: "part_of:out", label: "Is part of" },
   { value: "part_of:in", label: "Has part" },
-  { value: "related_to:out", label: "Is related to" },
+  { value: "related_to", label: "Is related to" },
 ];
 
 /** Links the shown Topic to another of the Learner's Topics (or one created inline). */

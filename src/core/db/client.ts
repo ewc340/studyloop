@@ -5,6 +5,9 @@ import * as schema from "./schema";
 
 export type Db = ReturnType<typeof drizzle<typeof schema>>;
 
+/** A transaction on a Db, as passed to `db.transaction(async (tx) => ...)`. */
+export type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
 export interface DbHandle {
   db: Db;
   close(): Promise<void>;

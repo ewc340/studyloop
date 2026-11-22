@@ -35,10 +35,10 @@ function addLinkForm(page: Page) {
   return page.getByRole("form", { name: "Add a link" });
 }
 
-/** On the open Topic page, links it to `other` by the given relation, e.g. "Has prerequisite". */
-async function addLink(page: Page, relation: string, other: string) {
+/** On the open Topic page, links it to `other` with the given link type, e.g. "Has prerequisite". */
+async function addLink(page: Page, linkType: string, other: string) {
   const form = addLinkForm(page);
-  await form.getByRole("combobox", { name: "Link type" }).selectOption({ label: relation });
+  await form.getByRole("combobox", { name: "Link type" }).selectOption({ label: linkType });
   await form.getByRole("combobox", { name: "Linked Topic" }).fill(other);
   await form.getByRole("option", { name: other, exact: true }).click();
   await expect(form.getByRole("list", { name: "Selected Linked Topic" })).toHaveText(`${other}×`);

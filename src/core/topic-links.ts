@@ -1,8 +1,8 @@
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import type { LearnerContext } from "./context";
-import type { Db } from "./db/client";
+import type { Tx } from "./db/client";
 import { topic, topicLink, topicLinkTypes } from "./db/schema";
-import { isUuid, toTopic, topicColumns, TopicNotFoundError, type Topic, type TopicId } from "./topics";
+import { isUuid, learnerTopic, toTopic, topicColumns, type Topic, type TopicId } from "./topics";
 
 /** Identifies a Topic Link. Branded so other ids can't be passed where a Topic Link is meant. */
 export type TopicLinkId = string & { readonly __brand: "TopicLinkId" };
@@ -27,7 +27,7 @@ export interface TopicLink {
   to: TopicId;
 }
 
-/** A Topic linked to the one whose page is shown, with the link that connects them (e.g. to remove it). */
+/** A Topic linked to a given Topic, with the Topic Link between them (e.g. to remove it). */
 export interface TopicNeighbour {
   linkId: TopicLinkId;
   topic: Topic;
@@ -76,7 +76,7 @@ export class InvalidTopicLinkError extends Error {
 /** The two Topics are already linked this way (related-to links count either way round). */
 export class DuplicateTopicLinkError extends Error {
   constructor(from: Topic, type: TopicLinkType, to: Topic) {
-    super(`"${from.name}" is already ${describe(type)} "${to.name}"`);
+    super(`"${from.name}" is already ${phrase(type)} "${to.name}"`);
     this.name = "DuplicateTopicLinkError";
   }
 }
@@ -91,18 +91,16 @@ export class TopicLinkCycleError extends Error {
   constructor(from: Topic, type: TopicLinkType, to: Topic, pathBack: Topic[]) {
     const cycle = [from, ...pathBack];
     super(
-      `"${from.name}" can't be ${describe(type)} "${to.name}": that would form a cycle (${cycle.map((t) => t.name).join(" → ")})`,
+      `"${from.name}" can't be ${phrase(type)} "${to.name}": that would form a cycle (${cycle.map((t) => t.name).join(" → ")})`,
     );
     this.name = "TopicLinkCycleError";
     this.cycle = cycle;
   }
 }
 
-function describe(type: TopicLinkType): string {
+function phrase(type: TopicLinkType): string {
   return { prerequisite_of: "a prerequisite of", part_of: "part of", related_to: "related to" }[type];
 }
-
-type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 /**
  * Links two of the acting Learner's Topics: `from` becomes a prerequisite of / part of / related to `to`.
@@ -111,7 +109,6 @@ type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
  */
 export async function linkTopics(ctx: LearnerContext, input: NewTopicLink): Promise<TopicLink> {
   if (!topicLinkTypes.includes(input.type)) throw new InvalidTopicLinkError(`Unknown Topic Link type "${input.type}"`);
-  if (input.from === input.to) throw new InvalidTopicLinkError("A Topic can't be linked to itself");
 
   return ctx.db.transaction(async (tx) => {
     // One Learner's link changes run one at a time, so concurrent links can't together form a cycle.
@@ -183,15 +180,6 @@ async function topicsByIds(tx: Tx, ctx: LearnerContext, ids: TopicId[]): Promise
   return ids.flatMap((id) => byId.get(id) ?? []);
 }
 
-async function learnerTopic(tx: Tx, ctx: LearnerContext, id: TopicId): Promise<Topic> {
-  if (!isUuid(id)) throw new TopicNotFoundError(id);
-  const [row] = await tx
-    .select(topicColumns)
-    .from(topic)
-    .where(and(eq(topic.id, id), eq(topic.userId, ctx.learnerId)));
-  if (!row) throw new TopicNotFoundError(id);
-  return toTopic(row);
-}
 
 /**
  * A related-to link has no direction, so it's stored smaller id first (Postgres returns lowercase

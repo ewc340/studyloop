@@ -1,5 +1,6 @@
 import { and, asc, eq, ilike, sql } from "drizzle-orm";
 import type { LearnerContext } from "./context";
+import type { Db, Tx } from "./db/client";
 import { topic } from "./db/schema";
 import { topicNeighbours, type TopicNeighbours } from "./topic-links";
 
@@ -161,17 +162,22 @@ export function isUuid(id: string): boolean {
 
 /** The acting Learner's Topic page: the Topic, its timeline (oldest first) and its linked Topics. */
 export async function getTopicPage(ctx: LearnerContext, id: TopicId): Promise<TopicPage> {
+  const topic = await learnerTopic(ctx.db, ctx, id);
+  const [entries, links] = await Promise.all([
+    Promise.all(timelineSources.map((source) => source(ctx, topic.id))),
+    topicNeighbours(ctx, topic.id),
+  ]);
+  const timeline = entries.flat().sort(byOccurredAt);
+  return { topic, timeline, links };
+}
+
+/** The acting Learner's Topic with this id, read through `db` or a transaction. Throws TopicNotFoundError if they have none. */
+export async function learnerTopic(db: Db | Tx, ctx: LearnerContext, id: TopicId): Promise<Topic> {
   if (!isUuid(id)) throw new TopicNotFoundError(id);
-  const [row] = await ctx.db
+  const [row] = await db
     .select(topicColumns)
     .from(topic)
     .where(and(eq(topic.id, id), eq(topic.userId, ctx.learnerId)));
   if (!row) throw new TopicNotFoundError(id);
-
-  const [entries, links] = await Promise.all([
-    Promise.all(timelineSources.map((source) => source(ctx, id))),
-    topicNeighbours(ctx, id),
-  ]);
-  const timeline = entries.flat().sort(byOccurredAt);
-  return { topic: toTopic(row), timeline, links };
+  return toTopic(row);
 }

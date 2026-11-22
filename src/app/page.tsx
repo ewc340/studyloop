@@ -22,9 +22,19 @@ async function SignedInHome() {
         Track what you learn, connect topics, and close the gaps your interviews expose.
       </p>
       <nav>
-        <Link href="/topics" className="font-medium text-blue-700 underline dark:text-blue-400">
-          Topics
-        </Link>
+        <ul className="flex flex-wrap gap-x-6 gap-y-2">
+          {[
+            ["/topics", "Topics"],
+            ["/companies", "Companies"],
+            ["/applications", "Applications"],
+          ].map(([href, label]) => (
+            <li key={href}>
+              <Link href={href} className="font-medium text-blue-700 underline dark:text-blue-400">
+                {label}
+              </Link>
+            </li>
+          ))}
+        </ul>
       </nav>
       <p data-testid="health" className="text-sm text-zinc-600 dark:text-zinc-400">
         Database: {health.database} · {health.migrationsApplied} migration

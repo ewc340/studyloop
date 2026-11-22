@@ -4,8 +4,12 @@ import type { Db } from "./db/client";
 import { topic, topicLink, topicLinkTypes } from "./db/schema";
 import { isUuid, toTopic, topicColumns, TopicNotFoundError, type Topic, type TopicId } from "./topics";
 
-/** Identifies a Topic Link. */
+/** Identifies a Topic Link. Branded so other ids can't be passed where a Topic Link is meant. */
 export type TopicLinkId = string & { readonly __brand: "TopicLinkId" };
+
+export function topicLinkId(id: string): TopicLinkId {
+  return id as TopicLinkId;
+}
 
 /** `from` is a prerequisite of / part of / related to `to`. */
 export type TopicLinkType = (typeof topicLinkTypes)[number];
@@ -41,6 +45,24 @@ export interface TopicNeighbours {
   parents: TopicNeighbour[];
   /** Topics related to this one, in either direction. */
   related: TopicNeighbour[];
+}
+
+/** No Topic Link with this id belongs to the acting Learner. */
+export class TopicLinkNotFoundError extends Error {
+  constructor(id: string) {
+    super(`Topic Link ${id} not found`);
+    this.name = "TopicLinkNotFoundError";
+  }
+}
+
+/** Removes one of the acting Learner's Topic Links. Throws TopicLinkNotFoundError if they have no such link. */
+export async function unlinkTopics(ctx: LearnerContext, id: TopicLinkId): Promise<void> {
+  if (!isUuid(id)) throw new TopicLinkNotFoundError(id);
+  const removed = await ctx.db
+    .delete(topicLink)
+    .where(and(eq(topicLink.id, id), eq(topicLink.userId, ctx.learnerId)))
+    .returning({ id: topicLink.id });
+  if (removed.length === 0) throw new TopicLinkNotFoundError(id);
 }
 
 /** The link can never be made, e.g. it links a Topic to itself. */
@@ -181,7 +203,7 @@ function storedOrder(from: TopicId, type: TopicLinkType, to: TopicId): [TopicId,
 
 function toTopicLink(row: typeof topicLink.$inferSelect): TopicLink {
   return {
-    id: row.id as TopicLinkId,
+    id: topicLinkId(row.id),
     from: row.fromTopicId as TopicId,
     type: row.type,
     to: row.toTopicId as TopicId,
@@ -221,7 +243,7 @@ export async function topicNeighbours(ctx: LearnerContext, id: TopicId): Promise
           : outgoing
             ? neighbours.parents
             : neighbours.parts;
-    group.push({ linkId: link.id as TopicLinkId, topic: other });
+    group.push({ linkId: topicLinkId(link.id), topic: other });
   }
   for (const group of Object.values(neighbours)) group.sort(byTopicName);
   return neighbours;

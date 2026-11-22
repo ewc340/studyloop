@@ -7,6 +7,9 @@ import {
   linkTopics,
   topicId,
   TopicLinkCycleError,
+  topicLinkId,
+  TopicLinkNotFoundError,
+  unlinkTopics,
   TopicNotFoundError,
   type LearnerContext,
   type TopicLinkType,
@@ -88,6 +91,61 @@ describe("Topic Links", () => {
       parts: ["redis"],
       parents: ["System design"],
       related: ["CDN", "Memoisation"],
+    });
+  });
+
+  describe("removing a link", () => {
+    it("removes it from both Topic pages, and the Topics can be linked again", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      const [http, caching, tcp] = await topics(ada, "HTTP", "Caching", "TCP");
+      const link = await linkTopics(ada, { from: http.id, type: "prerequisite_of", to: caching.id });
+      await linkTopics(ada, { from: tcp.id, type: "prerequisite_of", to: caching.id });
+
+      await unlinkTopics(ada, link.id);
+
+      expect(names((await getTopicPage(ada, caching.id)).links.prerequisites)).toEqual(["TCP"]);
+      expect((await getTopicPage(ada, http.id)).links.dependents).toEqual([]);
+      await linkTopics(ada, { from: http.id, type: "prerequisite_of", to: caching.id });
+    });
+
+    it("removes the link named on a Topic page", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      const [caching, cdn] = await topics(ada, "Caching", "CDN");
+      await linkTopics(ada, { from: cdn.id, type: "related_to", to: caching.id });
+
+      const [related] = (await getTopicPage(ada, caching.id)).links.related;
+      await unlinkTopics(ada, related.linkId);
+
+      expect((await getTopicPage(ada, cdn.id)).links.related).toEqual([]);
+    });
+
+    it("unblocks a link that would have formed a cycle through it", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      const [tcp, http, caching] = await topics(ada, "TCP", "HTTP", "Caching");
+      await linkTopics(ada, { from: tcp.id, type: "prerequisite_of", to: http.id });
+      const middle = await linkTopics(ada, { from: http.id, type: "prerequisite_of", to: caching.id });
+      await expect(linkTopics(ada, { from: caching.id, type: "prerequisite_of", to: tcp.id })).rejects.toBeInstanceOf(
+        TopicLinkCycleError,
+      );
+
+      await unlinkTopics(ada, middle.id);
+
+      await linkTopics(ada, { from: caching.id, type: "prerequisite_of", to: tcp.id });
+      expect(names((await getTopicPage(ada, tcp.id)).links.prerequisites)).toEqual(["Caching"]);
+    });
+
+    it("is not found for another Learner's link, an already removed one, or an id that names none", async () => {
+      const ada = await actingAsNewLearner(core.ctx);
+      const grace = await actingAsNewLearner(core.ctx);
+      const [http, caching] = await topics(ada, "HTTP", "Caching");
+      const link = await linkTopics(ada, { from: http.id, type: "prerequisite_of", to: caching.id });
+
+      await expect(unlinkTopics(grace, link.id)).rejects.toBeInstanceOf(TopicLinkNotFoundError);
+      expect(names((await getTopicPage(ada, caching.id)).links.prerequisites)).toEqual(["HTTP"]);
+
+      await unlinkTopics(ada, link.id);
+      await expect(unlinkTopics(ada, link.id)).rejects.toBeInstanceOf(TopicLinkNotFoundError);
+      await expect(unlinkTopics(ada, topicLinkId("not-a-uuid"))).rejects.toBeInstanceOf(TopicLinkNotFoundError);
     });
   });
 
